@@ -2,6 +2,14 @@
 
 > **Available-Food-First Nutrition Intelligence Grounded in the ICMR-NIN 2024 Dietary Guidelines for Indians.**
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FNaveen57990%2Fnutrivision-ai)
+
+### 🚀 Instant Deployment to Vercel
+Deploy your own instance of NutriVision in under 2 minutes:
+1. Click the **Deploy with Vercel** button above or open [Vercel Import](https://vercel.com/new/clone?repository-url=https://github.com/Naveen57990/nutrivision-ai).
+2. Configure environment variables (optional for live AI scanning: `GEMINI_API_KEY`).
+3. Deploy! Vercel automatically runs the Next.js App Router and serverless APIs out of the box with zero configuration.
+
 ---
 
 ## 1. Project Overview
