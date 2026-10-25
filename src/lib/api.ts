@@ -1,5 +1,15 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
+export interface AIConfig {
+  provider: "auto" | "openai" | "gemini" | "local" | "mock";
+  openaiApiKey?: string;
+  openaiModel?: string;
+  geminiApiKey?: string;
+  geminiModel?: string;
+  localLlmUrl?: string;
+  localLlmModel?: string;
+}
+
 export class ApiClient {
   private static getToken(): string | null {
     if (typeof window !== "undefined") {
@@ -21,8 +31,41 @@ export class ApiClient {
     }
   }
 
+  public static getAIConfig(): AIConfig {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("nutrivision_ai_config");
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      } catch {}
+    }
+    return {
+      provider: "auto",
+      openaiModel: "gpt-4o",
+      geminiModel: "gemini-1.5-flash",
+      localLlmUrl: "http://localhost:11434",
+      localLlmModel: "llama3.2-vision",
+    };
+  }
+
+  public static setAIConfig(config: AIConfig) {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("nutrivision_ai_config", JSON.stringify(config));
+    }
+  }
+
+  public static async testAIConnection(overrideConfig?: Partial<AIConfig>) {
+    const active = { ...this.getAIConfig(), ...(overrideConfig || {}) };
+    return this.request<any>("/api/ai-test", {
+      method: "POST",
+      body: JSON.stringify(active),
+    });
+  }
+
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken();
+    const aiConfig = this.getAIConfig();
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string> || {}),
     };
@@ -35,6 +78,15 @@ export class ApiClient {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
+    // Attach AI integration credentials and routing headers
+    if (aiConfig.provider) headers["x-ai-provider"] = aiConfig.provider;
+    if (aiConfig.openaiApiKey) headers["x-openai-key"] = aiConfig.openaiApiKey;
+    if (aiConfig.openaiModel) headers["x-openai-model"] = aiConfig.openaiModel;
+    if (aiConfig.geminiApiKey) headers["x-gemini-key"] = aiConfig.geminiApiKey;
+    if (aiConfig.geminiModel) headers["x-gemini-model"] = aiConfig.geminiModel;
+    if (aiConfig.localLlmUrl) headers["x-local-llm-url"] = aiConfig.localLlmUrl;
+    if (aiConfig.localLlmModel) headers["x-local-llm-model"] = aiConfig.localLlmModel;
+
     const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
@@ -44,7 +96,7 @@ export class ApiClient {
       let errorDetail = "An error occurred with your request.";
       try {
         const errorJson = await res.json();
-        errorDetail = errorJson.detail || errorDetail;
+        errorDetail = errorJson.detail || errorJson.error || errorJson.message || errorDetail;
       } catch {
         // Ignored
       }
@@ -60,32 +112,49 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify(data),
     });
-    this.setToken(res.access_token);
+    if (res.access_token) {
+      this.setToken(res.access_token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("nutrivision_user", JSON.stringify(res.user));
+      }
+    }
     return res;
   }
 
-  static async login(data: { email: string; password: string }) {
+  static async login(data: { username?: string; email?: string; password: string }) {
+    const email = data.email || data.username || "demo@nutrivision.health";
     const res = await this.request<{ access_token: string; user: any }>("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ email, password: data.password }),
     });
-    this.setToken(res.access_token);
+    if (res.access_token) {
+      this.setToken(res.access_token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("nutrivision_user", JSON.stringify(res.user));
+      }
+    }
     return res;
   }
 
   static async demoLogin() {
-    const res = await this.request<{ access_token: string; user: any }>("/api/auth/demo-login", {
-      method: "POST",
-    });
-    this.setToken(res.access_token);
-    return res;
+    return this.login({ email: "demo@nutrivision.health", password: "demopassword" });
   }
 
-  static async getMe() {
+  static async getProfile() {
     return this.request<any>("/api/auth/me");
   }
 
-  // --- Profile ---
+  static async getMe() {
+    return this.getProfile();
+  }
+
+  static async createProfile(profileData: any) {
+    return this.request<any>("/api/profile", {
+      method: "POST",
+      body: JSON.stringify(profileData),
+    });
+  }
+
   static async updateProfile(profileData: any) {
     return this.request<any>("/api/profile", {
       method: "PUT",
@@ -110,7 +179,7 @@ export class ApiClient {
   static async scanImage(file: File) {
     const formData = new FormData();
     formData.append("file", file);
-    return this.request<any>("/api/scan/upload", {
+    return this.request<any>("/api/scan", {
       method: "POST",
       body: formData,
     });
@@ -154,7 +223,7 @@ export class ApiClient {
   }
 
   static async recommendAvailableMeals(ingredients: string[], maxPrepTime?: number, mealType?: string) {
-    return this.request<any>("/api/available-food/recommend", {
+    return this.request<any>("/api/available-food", {
       method: "POST",
       body: JSON.stringify({
         available_ingredients: ingredients,
@@ -198,7 +267,7 @@ export class ApiClient {
 
   // --- Assistant ---
   static async sendChatMessage(message: string) {
-    return this.request<any>("/api/assistant/chat", {
+    return this.request<any>("/api/assistant", {
       method: "POST",
       body: JSON.stringify({ message }),
     });

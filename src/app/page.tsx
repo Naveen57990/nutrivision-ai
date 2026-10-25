@@ -23,7 +23,12 @@ import {
   Leaf,
   ArrowRight,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  Droplet,
+  Heart,
+  Bot,
+  User,
+  Settings
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -38,6 +43,11 @@ import {
 import FoodImage from "@/components/FoodImage";
 import SuitabilityBadge from "@/components/SuitabilityBadge";
 import MacroGauge from "@/components/MacroGauge";
+import CuteWaterTracker from "@/components/CuteWaterTracker";
+import MedicalProfileModal, { UserMedicalProfile } from "@/components/MedicalProfileModal";
+import { AISettingsModal } from "@/components/AISettingsModal";
+import SmartFoodIntelligenceStudio from "@/components/SmartFoodIntelligenceStudio";
+import { ApiClient } from "@/lib/api";
 
 // Initial Demo Kitchen Pantry
 const INITIAL_PANTRY = ["Rice", "Moong Dal", "Onions", "Tomatoes", "Eggs", "Potatoes"];
@@ -70,21 +80,43 @@ const INITIAL_MEALS = [
   }
 ];
 
-export default function NutriVisionWebApp() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "scanner" | "pantry" | "coach" | "database">("dashboard");
+const INITIAL_PROFILE: UserMedicalProfile = {
+  age: 29,
+  gender: "male",
+  height_cm: 175,
+  weight_kg: 72,
+  dietary_pattern: "vegetarian",
+  primary_goal: "muscle_gain",
+  activity_level: "moderate",
+  health_conditions: ["prediabetes", "hypertension"],
+  allergies: ["peanuts"],
+  medical_records: {
+    fasting_blood_sugar_mg_dl: 110,
+    hba1c_percent: 5.9,
+    systolic_bp: 132,
+    diastolic_bp: 86,
+    cholesterol_mg_dl: 195,
+    last_checkup_date: "2026-09-15"
+  },
+  daily_calorie_target: 2050,
+  daily_protein_target_g: 78,
+  daily_carb_target_g: 250,
+  daily_fat_target_g: 58,
+  daily_fiber_target_g: 38,
+  daily_water_target_ml: 2500,
+  daily_sodium_target_mg: 1800
+};
 
-  // User Profile State
-  const [profile, setProfile] = useState({
-    name: "Aarav Sharma",
-    age: 29,
-    goal: "healthy_weight_loss",
-    target_calories: 1950,
-    target_protein: 72,
-    target_carbs: 230,
-    target_fat: 55,
-    target_fiber: 30,
-    diet: "Vegetarian (with eggs)"
-  });
+export default function NutriVisionWebApp() {
+  const [activeTab, setActiveTab] = useState<
+    "food_intelligence" | "dashboard" | "scanner" | "water" | "pantry" | "coach" | "database"
+  >("food_intelligence");
+
+  // Medical Profile State
+  const [medicalProfile, setMedicalProfile] = useState<UserMedicalProfile>(INITIAL_PROFILE);
+  const [showMedicalModal, setShowMedicalModal] = useState(false);
+  const [showAISettingsModal, setShowAISettingsModal] = useState(false);
+  const [activeAIProviderName, setActiveAIProviderName] = useState("Smart Auto");
 
   // Daily Tracker State
   const [meals, setMeals] = useState<any[]>(INITIAL_MEALS);
@@ -108,11 +140,11 @@ export default function NutriVisionWebApp() {
   const [messages, setMessages] = useState<any[]>([
     {
       role: "assistant",
-      content: "Namaste Aarav! I'm your NutriVision AI Coach. I'm connected to your logged meals today (608 kcal, 23.4g protein) and your kitchen ingredients.\n\nAsk me how to balance your dinner or what high-protein snack you can cook right now!",
+      content: "Namaste Aarav! I'm your NutriVision AI Coach. I'm connected to your logged meals today (608 kcal, 23.4g protein), your medical profile (prediabetes, blood pressure limits), and your kitchen ingredients.\n\nAsk me what to cook right now, how to hit your protein target, or how to balance your Indian dinner!",
       suggested_followups: [
-        "How much protein did I have today?",
         "What can I cook with what I have at home?",
-        "How to reach my 30g daily fiber target?"
+        "How much protein do I need for muscle building?",
+        "How to balance my plate for prediabetes?"
       ]
     }
   ]);
@@ -123,8 +155,6 @@ export default function NutriVisionWebApp() {
   // Food Database Explorer State
   const [foods, setFoods] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedFood, setSelectedFood] = useState<any>(null);
-  const [portionGrams, setPortionGrams] = useState(150);
 
   // Daily Totals Calculation
   const totalCalories = meals.reduce((acc, m) => acc + m.total_calories, 0);
@@ -133,8 +163,23 @@ export default function NutriVisionWebApp() {
   const totalFiber = Number(meals.reduce((acc, m) => acc + m.total_fiber, 0).toFixed(1));
   const totalFat = Number((totalCalories * 0.25 / 9).toFixed(1));
 
-  // Load Initial Recommendations & Foods
+  // Initialize on mount
   useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem("nutrivision_user_profile");
+      if (savedProfile) {
+        setMedicalProfile(JSON.parse(savedProfile));
+      }
+      const aiConf = ApiClient.getAIConfig();
+      if (aiConf?.provider) {
+        setActiveAIProviderName(
+          aiConf.provider === "openai" ? "OpenAI GPT-4o" :
+          aiConf.provider === "gemini" ? "Google Gemini" :
+          aiConf.provider === "local" ? "Local Ollama" : "Smart Auto"
+        );
+      }
+    } catch {}
+
     fetchPantryRecommendations(pantry);
     fetch("/api/foods")
       .then((r) => r.json())
@@ -187,7 +232,7 @@ export default function NutriVisionWebApp() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-    } catch (err) {
+    } catch {
       alert("Camera access denied or unavailable. You can upload an image or choose a demo plate below!");
       setCameraActive(false);
     }
@@ -203,7 +248,6 @@ export default function NutriVisionWebApp() {
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL("image/jpeg");
       setCapturedImage(dataUrl);
-      // Stop video stream
       const stream = videoRef.current.srcObject as MediaStream;
       stream?.getTracks().forEach((track) => track.stop());
       setCameraActive(false);
@@ -222,10 +266,10 @@ export default function NutriVisionWebApp() {
 
   const triggerAnalysis = (imgSrc: string) => {
     setScanning(true);
-    setScanProgress("Looking at your plate...");
+    setScanProgress("Analyzing plate through AI Vision...");
     setScanReport(null);
 
-    setTimeout(() => setScanProgress("Detecting individual dishes & thali portions..."), 500);
+    setTimeout(() => setScanProgress("Classifying dishes against ICMR-NIN 2024 database..."), 600);
     setTimeout(() => {
       setScanning(false);
       const mockCandidates = [
@@ -236,7 +280,7 @@ export default function NutriVisionWebApp() {
       ];
       setDetectedCandidates(mockCandidates);
       evaluateMealReport(mockCandidates);
-    }, 1200);
+    }, 1300);
   };
 
   const evaluateMealReport = async (items: any[]) => {
@@ -300,23 +344,25 @@ export default function NutriVisionWebApp() {
 
   return (
     <div className="min-h-screen bg-[#F7FAFC] text-[#20312F] flex flex-col font-sans">
+      
       {/* Top Application Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E2ECEB] shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
+          
           {/* Logo & Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#42BFA5] to-[#177E75] flex items-center justify-center text-white shadow-sm">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#42BFA5] to-[#177E75] flex items-center justify-center text-white shadow-sm">
               <Leaf className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-black text-xl tracking-tight text-[#177E75]">NutriVision</span>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-[#E9F8F3] text-[#218C68] border border-[#218C68]/20">
-                  Vercel Live
+                  Production Ready
                 </span>
               </div>
               <span className="text-[11px] font-semibold text-[#8E9F9D] block">
-                Available-Food-First Nutrition Intelligence
+                Clinical Nutrition & Food Intelligence
               </span>
             </div>
           </div>
@@ -324,11 +370,13 @@ export default function NutriVisionWebApp() {
           {/* Mode Switcher Tabs (Desktop) */}
           <nav className="hidden lg:flex items-center gap-1 bg-[#F7FAFC] p-1.5 rounded-2xl border border-[#E2ECEB]">
             {[
+              { id: "food_intelligence", label: "AI Food Studio", icon: ChefHat },
               { id: "dashboard", label: "Dashboard & Tracker", icon: LayoutDashboard },
-              { id: "scanner", label: "AI Food Scanner", icon: Camera },
-              { id: "pantry", label: "What Can I Eat?", icon: ChefHat },
-              { id: "coach", label: "AI Coach", icon: Sparkles },
-              { id: "database", label: "Food Database", icon: Utensils }
+              { id: "water", label: "Pure Water", icon: Droplet },
+              { id: "scanner", label: "Plate Scanner", icon: Camera },
+              { id: "pantry", label: "Kitchen Shelf", icon: Utensils },
+              { id: "coach", label: "Clinical Coach", icon: Sparkles },
+              { id: "database", label: "Food DB", icon: Search }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -336,39 +384,63 @@ export default function NutriVisionWebApp() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
                     isActive
-                      ? "bg-white text-[#177E75] shadow-xs"
+                      ? "bg-white text-[#177E75] shadow-xs ring-1 ring-teal-500/10"
                       : "text-[#5A6D6B] hover:text-[#20312F] hover:bg-white/50"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? "text-[#42BFA5]" : "text-[#8E9F9D]"}`} />
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? "text-[#42BFA5]" : "text-[#8E9F9D]"}`} />
                   <span>{tab.label}</span>
                 </button>
               );
             })}
           </nav>
 
-          {/* User Profile Pill */}
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs font-bold text-[#20312F]">{profile.name}</span>
-              <span className="text-[10px] text-[#218C68] font-semibold">{profile.diet}</span>
-            </div>
-            <div className="w-9 h-9 rounded-full bg-[#E9F8F3] border border-[#42BFA5] flex items-center justify-center text-xs font-black text-[#177E75]">
-              AS
-            </div>
+          {/* Quick Action Pills: Medical Profile & AI Provider Settings */}
+          <div className="flex items-center gap-2.5">
+            
+            {/* AI Provider Status Pill */}
+            <button
+              onClick={() => setShowAISettingsModal(true)}
+              title="Configure OpenAI, Gemini, or Local Ollama"
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-900 text-xs font-bold transition-colors shadow-xs"
+            >
+              <Bot className="w-3.5 h-3.5 text-purple-600" />
+              <span>{activeAIProviderName}</span>
+            </button>
+
+            {/* User Medical Profile Pill */}
+            <button
+              onClick={() => setShowMedicalModal(true)}
+              className="flex items-center gap-2.5 p-1.5 pr-3 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-all text-left group"
+            >
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center text-xs font-black shadow-xs">
+                {medicalProfile.gender === "female" ? "F" : "M"}
+              </div>
+              <div className="hidden sm:block">
+                <div className="text-xs font-bold text-teal-950 flex items-center gap-1">
+                  <span>{medicalProfile.age}y, {medicalProfile.weight_kg}kg</span>
+                  <span className="text-[10px] text-teal-600">({medicalProfile.dietary_pattern})</span>
+                </div>
+                <div className="text-[10px] text-teal-700 font-medium">
+                  {medicalProfile.primary_goal.replace(/_/g, " ")}
+                </div>
+              </div>
+            </button>
+
           </div>
         </div>
 
         {/* Mobile Navigation Rail */}
-        <div className="lg:hidden flex items-center justify-around border-t border-[#EDF3F3] bg-white px-2 py-2">
+        <div className="lg:hidden flex items-center justify-around border-t border-[#EDF3F3] bg-white px-2 py-2 overflow-x-auto">
           {[
+            { id: "food_intelligence", label: "Studio", icon: ChefHat },
             { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-            { id: "scanner", label: "Scanner", icon: Camera },
-            { id: "pantry", label: "Pantry", icon: ChefHat },
+            { id: "water", label: "Water", icon: Droplet },
+            { id: "scanner", label: "Scan", icon: Camera },
             { id: "coach", label: "Coach", icon: Sparkles },
-            { id: "database", label: "Foods", icon: Utensils }
+            { id: "database", label: "Foods", icon: Search }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -392,10 +464,27 @@ export default function NutriVisionWebApp() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
 
         {/* ============================================================== */}
+        {/* TAB 0: FLAGSHIP AI FOOD INTELLIGENCE & RECIPE STUDIO          */}
+        {/* ============================================================== */}
+        {activeTab === "food_intelligence" && (
+          <div className="space-y-6 animate-fade-in">
+            <SmartFoodIntelligenceStudio
+              userProfile={medicalProfile}
+              onOpenProfile={() => setShowMedicalModal(true)}
+              onOpenAISettings={() => setShowAISettingsModal(true)}
+              onLogMeal={(meal) => {
+                setMeals([...meals, { id: Date.now(), ...meal }]);
+              }}
+            />
+          </div>
+        )}
+
+        {/* ============================================================== */}
         {/* TAB 1: DASHBOARD & DAILY TRACKER                              */}
         {/* ============================================================== */}
         {activeTab === "dashboard" && (
           <div className="space-y-8 animate-fade-in">
+            
             {/* Top Greeting & Banner */}
             <div className="bg-gradient-to-r from-[#42BFA5] via-[#2ba98e] to-[#177E75] rounded-3xl p-6 sm:p-8 text-white card-shadow flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div className="space-y-2 max-w-xl">
@@ -406,24 +495,24 @@ export default function NutriVisionWebApp() {
                   Welcome back, Aarav.
                 </h1>
                 <p className="text-sm text-[#F0FBFA] leading-relaxed">
-                  You have consumed <strong className="text-white">{totalCalories} kcal</strong> and <strong className="text-white">{totalProtein}g protein</strong> today. You have <strong className="text-white">{Math.max(0, profile.target_calories - totalCalories)} kcal</strong> remaining in your healthy deficit window.
+                  You have consumed <strong className="text-white">{totalCalories} kcal</strong> and <strong className="text-white">{totalProtein}g protein</strong> today. Your clinical ICMR target is <strong className="text-white">{medicalProfile.daily_protein_target_g}g protein</strong>.
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-2.5">
                 <button
-                  onClick={() => setActiveTab("scanner")}
+                  onClick={() => setActiveTab("food_intelligence")}
                   className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-[#177E75] font-bold text-xs shadow-md hover:bg-[#F0FBFA] transition-all"
                 >
-                  <Camera className="w-4 h-4 text-[#42BFA5]" />
-                  <span>Scan Next Meal</span>
+                  <ChefHat className="w-4 h-4 text-[#42BFA5]" />
+                  <span>AI Food Studio</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab("pantry")}
+                  onClick={() => setActiveTab("water")}
                   className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 text-white font-bold text-xs hover:bg-white/30 transition-all"
                 >
-                  <ChefHat className="w-4 h-4" />
-                  <span>What Can I Eat?</span>
+                  <Droplet className="w-4 h-4" />
+                  <span>Log Water</span>
                 </button>
               </div>
             </div>
@@ -432,521 +521,527 @@ export default function NutriVisionWebApp() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-[#20312F]">Today’s Macro & Calorie Targets</h2>
-                <span className="text-xs font-semibold text-[#8E9F9D]">ICMR-NIN 2024 Reference</span>
+                <span className="text-xs font-semibold text-[#8E9F9D]">
+                  Calibrated for {medicalProfile.primary_goal.replace(/_/g, " ")} ({medicalProfile.weight_kg}kg)
+                </span>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                <MacroGauge label="Calories" current={totalCalories} target={profile.target_calories} unit="kcal" colorHex="#177E75" bgHex="#E9F8F3" />
-                <MacroGauge label="Protein" current={totalProtein} target={profile.target_protein} unit="g" colorHex="#42BFA5" bgHex="#E9F8F3" />
-                <MacroGauge label="Carbs" current={totalCarbs} target={profile.target_carbs} unit="g" colorHex="#377BC4" bgHex="#EDF5FF" />
-                <MacroGauge label="Fat" current={totalFat} target={profile.target_fat} unit="g" colorHex="#B87921" bgHex="#FFF5E5" />
-                <MacroGauge label="Fiber" current={totalFiber} target={profile.target_fiber} unit="g" colorHex="#218C68" bgHex="#E8F7EF" />
+                <MacroGauge label="Calories" current={totalCalories} target={medicalProfile.daily_calorie_target} unit="kcal" colorHex="#177E75" bgHex="#E9F8F3" />
+                <MacroGauge label="Protein" current={totalProtein} target={medicalProfile.daily_protein_target_g} unit="g" colorHex="#42BFA5" bgHex="#E9F8F3" />
+                <MacroGauge label="Carbs" current={totalCarbs} target={medicalProfile.daily_carb_target_g} unit="g" colorHex="#377BC4" bgHex="#EDF5FF" />
+                <MacroGauge label="Fat" current={totalFat} target={medicalProfile.daily_fat_target_g} unit="g" colorHex="#B87921" bgHex="#FFF5E5" />
+                <MacroGauge label="Fiber" current={totalFiber} target={medicalProfile.daily_fiber_target_g} unit="g" colorHex="#218C68" bgHex="#E8F7EF" />
               </div>
             </div>
 
+            {/* Cute Water Tracker directly on Dashboard */}
+            <CuteWaterTracker 
+              userWeightKg={medicalProfile.weight_kg} 
+              dailyTargetMl={medicalProfile.daily_water_target_ml} 
+            />
+
             {/* Grid: Meals Diary & Weekly Caloric Consistency */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
               {/* Left Column: Today's Logged Meals Diary */}
               <div className="lg:col-span-7 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-base text-[#20312F]">Today’s Logged Diary</h3>
+                  <h3 className="text-base font-bold text-[#20312F]">Today’s Meal Diary</h3>
                   <button
-                    onClick={() => setActiveTab("database")}
+                    onClick={() => setActiveTab("food_intelligence")}
                     className="text-xs font-bold text-[#177E75] hover:underline flex items-center gap-1"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Item</span>
+                    <Plus className="w-3.5 h-3.5" /> What Can I Make?
                   </button>
                 </div>
 
                 <div className="space-y-3">
-                  {meals.map((m) => (
-                    <div
-                      key={m.id}
-                      className="p-5 rounded-2xl bg-white border border-[#E2ECEB] card-shadow space-y-3"
-                    >
-                      <div className="flex items-center justify-between border-b border-[#EDF3F3] pb-2">
+                  {meals.map((meal) => (
+                    <div key={meal.id} className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-extrabold uppercase px-2.5 py-0.5 rounded-md bg-[#E9F8F3] text-[#177E75]">
-                            {m.meal_type}
-                          </span>
-                          <span className="text-xs text-[#8E9F9D]">{m.items.length} dishes</span>
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#42BFA5]" />
+                          <h4 className="font-bold text-sm capitalize text-[#20312F]">{meal.meal_type}</h4>
                         </div>
-                        <span className="text-sm font-black text-[#177E75]">{m.total_calories} kcal</span>
+                        <span className="text-xs font-extrabold text-[#177E75] font-mono">
+                          {meal.total_calories} kcal
+                        </span>
                       </div>
 
-                      <div className="space-y-1">
-                        {m.items.map((it: any, idx: number) => (
-                          <div key={idx} className="flex justify-between text-xs text-[#5A6D6B]">
-                            <span>• {it.food_name}</span>
-                            <span className="font-semibold text-[#20312F]">{it.weight_grams}g ({it.calories} kcal)</span>
+                      <div className="divide-y divide-slate-100">
+                        {meal.items.map((item: any, iIdx: number) => (
+                          <div key={iIdx} className="py-2 flex items-center justify-between text-xs">
+                            <span className="text-[#5A6D6B] font-medium">{item.food_name}</span>
+                            <span className="text-[#8E9F9D] font-mono">{item.calories} kcal ({item.protein}g P)</span>
                           </div>
                         ))}
                       </div>
 
-                      <div className="pt-2 border-t border-[#EDF3F3] flex justify-between text-[11px] text-[#8E9F9D]">
-                        <span>{m.total_protein}g Protein</span>
-                        <span>{m.total_carbs}g Carbs</span>
-                        <span>{m.total_fiber}g Fiber</span>
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-[#5A6D6B]">
+                        <span>Protein: <strong>{meal.total_protein}g</strong></span>
+                        <span>Carbs: <strong>{meal.total_carbs}g</strong></span>
+                        <span>Fiber: <strong>{meal.total_fiber}g</strong></span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Right Column: Weekly Caloric Consistency & Available Recipe Hook */}
+              {/* Right Column: Weekly Trend */}
               <div className="lg:col-span-5 space-y-4">
-                <div className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-sm text-[#20312F]">7-Day Caloric Trend</h3>
-                    <TrendingUp className="w-4 h-4 text-[#42BFA5]" />
-                  </div>
-                  <div className="h-44 w-full">
+                <h3 className="text-base font-bold text-[#20312F]">Weekly Consistency</h3>
+                <div className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-4">
+                  <div className="h-56 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={[
-                        { day: "Mon", cal: 1820 },
-                        { day: "Tue", cal: 1910 },
-                        { day: "Wed", cal: 1750 },
-                        { day: "Thu", cal: 1980 },
-                        { day: "Fri", cal: 1850 },
-                        { day: "Sat", cal: 2050 },
-                        { day: "Today", cal: totalCalories }
+                        { day: "Mon", kcal: 1980, target: medicalProfile.daily_calorie_target },
+                        { day: "Tue", kcal: 2050, target: medicalProfile.daily_calorie_target },
+                        { day: "Wed", kcal: 1890, target: medicalProfile.daily_calorie_target },
+                        { day: "Thu", kcal: 2110, target: medicalProfile.daily_calorie_target },
+                        { day: "Fri", kcal: 1950, target: medicalProfile.daily_calorie_target },
+                        { day: "Sat", kcal: 2020, target: medicalProfile.daily_calorie_target },
+                        { day: "Sun", kcal: totalCalories, target: medicalProfile.daily_calorie_target }
                       ]}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#EDF3F3" />
-                        <XAxis dataKey="day" tick={{ fontSize: 10, fill: "#8E9F9D" }} />
-                        <YAxis tick={{ fontSize: 10, fill: "#8E9F9D" }} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EDF3F3" />
+                        <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} domain={[1200, 2400]} />
                         <Tooltip />
-                        <Bar dataKey="cal" fill="#42BFA5" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="kcal" fill="#42BFA5" radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
-
-                {/* Available Food Prompt Card */}
-                <div className="p-5 rounded-3xl bg-[#EEF7FF] border border-[#377BC4]/20 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ChefHat className="w-5 h-5 text-[#377BC4]" />
-                    <h4 className="font-bold text-sm text-[#20312F]">What’s in your kitchen?</h4>
+                  <div className="text-xs text-[#5A6D6B] bg-[#E9F8F3] p-3 rounded-2xl flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#218C68] shrink-0 mt-0.5" />
+                    <span>You have remained within your ICMR target window for 6 of the last 7 days!</span>
                   </div>
-                  <p className="text-xs text-[#5A6D6B] leading-relaxed">
-                    You currently have <strong className="text-[#20312F]">{pantry.join(", ")}</strong> saved. Our engine found {pantryResults?.tier1_best_available?.length || 2} instant meals cookable right now!
-                  </p>
-                  <button
-                    onClick={() => setActiveTab("pantry")}
-                    className="w-full py-2.5 rounded-xl bg-[#377BC4] text-white font-bold text-xs hover:bg-[#2b65a4] transition-colors"
-                  >
-                    Explore Available Recipes →
-                  </button>
                 </div>
               </div>
+
             </div>
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* TAB 2: AI FOOD SCANNER & CAMERA                               */}
+        {/* TAB 2: PURE HYDRATION TRACKER (DEDICATED VIEW)                */}
+        {/* ============================================================== */}
+        {activeTab === "water" && (
+          <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
+            <CuteWaterTracker 
+              userWeightKg={medicalProfile.weight_kg} 
+              dailyTargetMl={medicalProfile.daily_water_target_ml} 
+            />
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 3: OPTICAL FOOD SCANNER                                   */}
         {/* ============================================================== */}
         {activeTab === "scanner" && (
-          <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-black text-[#20312F]">AI Multi-Dish Food Scanner</h2>
-                <p className="text-xs text-[#5A6D6B] mt-0.5">
-                  Point camera at any Indian plate, curry, or thali to identify discrete dishes and portion grams.
-                </p>
-              </div>
-              <SuitabilityBadge status="optimal" label="Optical Recognition Active" />
+          <div className="space-y-8 animate-fade-in">
+            <div className="max-w-2xl">
+              <h2 className="text-xl font-bold text-[#20312F]">AI Multi-Dish Indian Plate Scanner</h2>
+              <p className="text-xs text-[#5A6D6B] mt-0.5">
+                Capture or upload an Indian thali or mixed plate. Our AI detects distinct components and portions.
+              </p>
             </div>
 
-            {/* Live Camera Stream / Capture Viewport */}
-            <div className="bg-white p-6 rounded-3xl border border-[#E2ECEB] card-shadow space-y-4">
-              <div className="relative aspect-[16/9] sm:aspect-[21/9] rounded-2xl overflow-hidden bg-black/90 flex items-center justify-center border-2 border-dashed border-[#42BFA5]">
-                {cameraActive ? (
-                  <>
-                    <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                    {/* Reticle Target */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-48 border-2 border-[#42BFA5] rounded-3xl flex items-center justify-center">
-                        <span className="text-[10px] uppercase font-bold text-white bg-black/60 px-2 py-0.5 rounded-md">
-                          Align Plate
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                ) : capturedImage ? (
-                  <Image src={capturedImage} alt="Captured food" fill className="object-cover" />
-                ) : (
-                  <div className="text-center p-6 space-y-3 text-white">
-                    <Camera className="w-12 h-12 text-[#42BFA5] mx-auto opacity-80" />
-                    <p className="text-sm font-bold">Webcam Ready or Choose a Demo Thali</p>
-                    <p className="text-xs text-white/60 max-w-sm mx-auto">
-                      Point directly at a plate containing roti, dal, sabzi, or idlis to separate items.
-                    </p>
-                  </div>
-                )}
-
-                {scanning && (
-                  <div className="absolute inset-0 bg-black/70 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-3">
-                    <div className="w-10 h-10 border-4 border-white/30 border-t-[#42BFA5] rounded-full animate-spin" />
-                    <span className="text-xs font-bold">{scanProgress}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                {!cameraActive ? (
-                  <button
-                    onClick={handleStartCamera}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#177E75] text-white font-bold text-xs hover:bg-[#12645e] transition-colors"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Turn On Live Camera</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleCapturePhoto}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#42BFA5] text-white font-bold text-xs hover:bg-[#38a892] transition-colors"
-                  >
-                    <Camera className="w-4 h-4" />
-                    <span>Capture & Analyze Plate</span>
-                  </button>
-                )}
-
-                <label className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#F7FAFC] border border-[#E2ECEB] text-[#20312F] font-bold text-xs hover:bg-[#E9F8F3] hover:text-[#177E75] cursor-pointer">
-                  <span>Upload Image File</span>
-                  <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                </label>
-
-                {/* Instant Sample Plates */}
-                <button
-                  onClick={() => triggerAnalysis("https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80")}
-                  className="px-4 py-2.5 rounded-xl bg-[#E9F8F3] text-[#177E75] font-bold text-xs hover:bg-[#d4f3e7]"
-                >
-                  Load Sample Vegetarian Thali
-                </button>
-              </div>
-            </div>
-
-            {/* Detected Candidates Confirmation */}
-            {detectedCandidates.length > 0 && (
-              <div className="bg-white p-6 rounded-3xl border border-[#E2ECEB] card-shadow space-y-4">
-                <div className="flex items-center justify-between border-b border-[#EDF3F3] pb-3">
-                  <div>
-                    <h3 className="font-bold text-base text-[#20312F]">Confirmed Plate Items</h3>
-                    <p className="text-xs text-[#8E9F9D]">Verify dish identification and adjust portion weights.</p>
-                  </div>
-                  <span className="text-xs font-bold text-[#177E75] bg-[#E9F8F3] px-2.5 py-1 rounded-full">
-                    {detectedCandidates.length} Items Detected
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {detectedCandidates.map((c, i) => (
-                    <div key={i} className="p-3.5 rounded-2xl bg-[#F7FAFC] border border-[#E2ECEB] flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="font-bold text-xs text-[#20312F]">{c.dish_name}</h4>
-                        <span className="text-[11px] text-[#8E9F9D]">{c.household_measure}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-white border border-[#E2ECEB] px-2 py-1 rounded-lg">
-                        <input
-                          type="number"
-                          value={c.suggested_weight_grams}
-                          onChange={(e) => {
-                            const updated = [...detectedCandidates];
-                            updated[i].suggested_weight_grams = Number(e.target.value);
-                            setDetectedCandidates(updated);
-                            evaluateMealReport(updated);
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
+              {/* Left Column: Capture or Upload Box */}
+              <div className="lg:col-span-6 space-y-4">
+                <div className="bg-white rounded-3xl p-6 border border-[#E2ECEB] card-shadow space-y-4">
+                  
+                  {cameraActive ? (
+                    <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex flex-col items-center justify-center">
+                      <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                      <div className="absolute bottom-4 flex gap-3">
+                        <button
+                          onClick={handleCapturePhoto}
+                          className="px-6 py-2.5 rounded-full bg-[#42BFA5] text-white font-bold text-xs shadow-lg flex items-center gap-2"
+                        >
+                          <Camera className="w-4 h-4" /> Snap Photo
+                        </button>
+                        <button
+                          onClick={() => {
+                            const stream = videoRef.current?.srcObject as MediaStream;
+                            stream?.getTracks().forEach((t) => t.stop());
+                            setCameraActive(false);
                           }}
-                          className="w-14 text-center font-bold text-xs text-[#20312F] focus:outline-none"
-                        />
-                        <span className="text-[10px] text-[#8E9F9D]">g</span>
+                          className="px-4 py-2.5 rounded-full bg-white/20 text-white font-bold text-xs"
+                        >
+                          Cancel
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {/* Scanned Verified Nutrition Report Card */}
-                {scanReport && (
-                  <div className="mt-4 p-5 rounded-2xl bg-[#E9F8F3] border border-[#42BFA5]/30 space-y-4">
-                    <div className="flex items-center justify-between">
+                  ) : capturedImage ? (
+                    <div className="relative rounded-2xl overflow-hidden border border-[#E2ECEB] aspect-video flex items-center justify-center bg-black/5">
+                      <img src={capturedImage} alt="Captured meal" className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => { setCapturedImage(null); setScanReport(null); setDetectedCandidates([]); }}
+                        className="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white text-xs hover:bg-black/80"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-[#BCE8DE] rounded-3xl p-8 text-center bg-[#F7FAFC] flex flex-col items-center justify-center gap-3">
+                      <div className="w-14 h-14 rounded-2xl bg-[#E9F8F3] text-[#177E75] flex items-center justify-center shadow-xs">
+                        <Camera className="w-6 h-6" />
+                      </div>
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-[#177E75]">Deterministic IFCT Report</span>
-                        <h4 className="text-lg font-black text-[#177E75]">{scanReport.nutrients.calories} kcal</h4>
+                        <div className="text-sm font-bold text-[#20312F]">Upload or Snap Plate</div>
+                        <p className="text-xs text-[#8E9F9D] mt-0.5">Clear top-down photo gives best portion accuracy</p>
                       </div>
-                      <div className="text-right text-xs text-[#20312F]">
-                        <span className="font-bold">{scanReport.nutrients.protein}g Protein</span> •{" "}
-                        <span className="font-bold">{scanReport.nutrients.fiber}g Fiber</span>
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          onClick={handleStartCamera}
+                          className="px-4 py-2 rounded-xl bg-[#177E75] text-white text-xs font-bold shadow-xs hover:bg-[#126861]"
+                        >
+                          Open Camera
+                        </button>
+                        <label className="px-4 py-2 rounded-xl bg-white border border-[#E2ECEB] text-[#20312F] text-xs font-bold cursor-pointer hover:bg-[#F7FAFC]">
+                          Browse File
+                          <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                        </label>
                       </div>
                     </div>
+                  )}
 
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {scanReport.suitability.actionable_tips.map((tip: string, idx: number) => (
-                        <div key={idx} className="flex items-center gap-1.5 text-[#177E75] bg-white/70 px-2.5 py-1 rounded-md">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#218C68]" />
-                          <span>{tip}</span>
+                  {/* Sample Plate Presets for Quick Testing */}
+                  <div>
+                    <span className="text-[11px] font-bold text-[#8E9F9D] uppercase tracking-wider block mb-2">
+                      Or Test with Sample Plates:
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => {
+                          const demo = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80";
+                          setCapturedImage(demo);
+                          triggerAnalysis(demo);
+                        }}
+                        className="p-2.5 rounded-xl border border-[#E2ECEB] hover:border-[#42BFA5] text-left text-xs transition-colors flex items-center gap-2 bg-[#F7FAFC]"
+                      >
+                        <span className="text-base">🍛</span>
+                        <div>
+                          <strong className="block text-[#20312F]">North Indian Thali</strong>
+                          <span className="text-[10px] text-[#8E9F9D]">Roti, Dal, Sabzi, Rice</span>
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const demo = "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80";
+                          setCapturedImage(demo);
+                          triggerAnalysis(demo);
+                        }}
+                        className="p-2.5 rounded-xl border border-[#E2ECEB] hover:border-[#42BFA5] text-left text-xs transition-colors flex items-center gap-2 bg-[#F7FAFC]"
+                      >
+                        <span className="text-base">🥞</span>
+                        <div>
+                          <strong className="block text-[#20312F]">South Indian Tiffin</strong>
+                          <span className="text-[10px] text-[#8E9F9D]">Idli, Sambar, Chutney</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Right Column: Detection Candidates & Macro Report */}
+              <div className="lg:col-span-6 space-y-4">
+                {scanning && (
+                  <div className="p-8 rounded-3xl bg-white border border-[#E2ECEB] text-center space-y-3">
+                    <RefreshCw className="w-8 h-8 text-[#42BFA5] animate-spin mx-auto" />
+                    <div className="font-bold text-sm text-[#20312F]">{scanProgress}</div>
+                    <p className="text-xs text-[#8E9F9D]">Extracting volumetric depth and household measures...</p>
+                  </div>
+                )}
+
+                {scanReport && (
+                  <div className="bg-white rounded-3xl p-6 border border-[#BCE8DE] card-shadow space-y-5 animate-fade-in">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#EDF3F3]">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-[#218C68] tracking-wider">
+                          Optical Plate Breakdown
+                        </span>
+                        <h3 className="font-bold text-base text-[#20312F]">
+                          {detectedCandidates.length} Items Detected
+                        </h3>
+                      </div>
+                      <SuitabilityBadge level={scanReport.suitability.level} score={scanReport.suitability.score} />
+                    </div>
+
+                    {/* Detected Items List */}
+                    <div className="space-y-2.5">
+                      {detectedCandidates.map((c, i) => (
+                        <div key={i} className="p-3 rounded-2xl bg-[#F7FAFC] border border-[#E2ECEB] flex items-center justify-between text-xs">
+                          <div>
+                            <strong className="text-[#20312F] block">{c.dish_name}</strong>
+                            <span className="text-[11px] text-[#8E9F9D]">{c.household_measure}</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-[#E9F8F3] text-[#177E75] font-mono font-bold text-[10px]">
+                            {Math.round(c.confidence * 100)}% match
+                          </span>
                         </div>
                       ))}
                     </div>
 
+                    {/* Scientific Nutrient Totals */}
+                    <div className="grid grid-cols-4 gap-2 bg-[#E9F8F3] p-3 rounded-2xl text-center text-xs">
+                      <div>
+                        <span className="text-[10px] text-[#5A6D6B] block">Calories</span>
+                        <strong className="text-sm text-[#177E75] font-mono">{scanReport.nutrients.calories}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#5A6D6B] block">Protein</span>
+                        <strong className="text-sm text-[#177E75] font-mono">{scanReport.nutrients.protein}g</strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#5A6D6B] block">Carbs</span>
+                        <strong className="text-sm text-[#177E75] font-mono">{scanReport.nutrients.carbs}g</strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#5A6D6B] block">Fiber</span>
+                        <strong className="text-sm text-[#218C68] font-mono">{scanReport.nutrients.fiber}g</strong>
+                      </div>
+                    </div>
+
                     <button
                       onClick={handleLogScannedMeal}
-                      className="w-full py-3 rounded-xl bg-[#177E75] text-white font-bold text-xs hover:bg-[#12645e] transition-colors card-shadow"
+                      className="w-full py-3 rounded-2xl bg-[#177E75] hover:bg-[#126861] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
                     >
-                      Log Scanned Meal to Diary →
+                      <Plus className="w-4 h-4" /> Confirm & Log Meal to Today
                     </button>
                   </div>
                 )}
               </div>
-            )}
+
+            </div>
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* TAB 3: WHAT CAN I EAT RIGHT NOW? (SMART PANTRY)               */}
+        {/* TAB 4: AVAILABLE FOOD (SMART PANTRY MATCHER)                  */}
         {/* ============================================================== */}
         {activeTab === "pantry" && (
-          <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E9F8F3] text-xs font-bold text-[#177E75] mb-2">
-                <ChefHat className="w-4 h-4 text-[#42BFA5]" />
-                <span>The Core Differentiator</span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-[#20312F]">
-                What Can I Eat Right Now?
+          <div className="space-y-8 animate-fade-in">
+            <div className="max-w-2xl">
+              <h2 className="text-xl font-bold text-[#20312F]">
+                “What Can I Eat Right Now?” Pantry Matcher
               </h2>
-              <p className="text-xs sm:text-sm text-[#5A6D6B] mt-1">
-                Toggle the items you actually have in your kitchen. Watch candidate recipes immediately rank into 3 realistic tiers.
+              <p className="text-xs text-[#5A6D6B] mt-0.5">
+                Select ingredients you currently have in your kitchen. We rank recipes into 3 realistic tiers.
               </p>
             </div>
 
-            {/* Smart Kitchen Shelf Chips */}
-            <div className="bg-white p-6 rounded-3xl border border-[#E2ECEB] card-shadow space-y-4">
-              <span className="text-xs font-bold text-[#5A6D6B] uppercase block">
-                Tap items available in your kitchen:
-              </span>
-
+            {/* Interactive Pantry Chips */}
+            <div className="p-6 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-4">
               <div className="flex flex-wrap gap-2">
                 {[
-                  "Rice", "Moong Dal", "Toor Dal", "Potatoes", "Onions",
-                  "Tomatoes", "Eggs", "Paneer", "Curd", "Besan", "Cumin", "Turmeric"
+                  "Rice", "Moong Dal", "Toor Dal", "Whole Wheat Atta", "Onions",
+                  "Tomatoes", "Potatoes", "Eggs", "Curd", "Paneer", "Spinach", "Mustard Seeds"
                 ].map((item) => {
-                  const isPresent = pantry.includes(item);
+                  const isSelected = pantry.includes(item);
                   return (
                     <button
                       key={item}
                       onClick={() => handleTogglePantryItem(item)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        isPresent
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                        isSelected
                           ? "bg-[#177E75] text-white shadow-xs"
-                          : "bg-[#F7FAFC] border border-[#E2ECEB] text-[#5A6D6B] hover:border-[#42BFA5]"
+                          : "bg-[#F7FAFC] text-[#5A6D6B] border border-[#E2ECEB] hover:border-[#42BFA5]"
                       }`}
                     >
-                      {isPresent ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                      {isSelected ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
                       <span>{item}</span>
                     </button>
                   );
                 })}
               </div>
 
-              {/* Custom Item Form */}
-              <form onSubmit={handleAddCustomPantry} className="pt-2 border-t border-[#EDF3F3] flex gap-2">
+              {/* Add Custom Ingredient */}
+              <form onSubmit={handleAddCustomPantry} className="flex gap-2">
                 <input
                   type="text"
                   value={customPantryInput}
                   onChange={(e) => setCustomPantryInput(e.target.value)}
-                  placeholder="Type any other ingredient (e.g. Spinach, Garlic)..."
-                  className="flex-1 px-4 py-2 rounded-xl border border-[#E2ECEB] text-xs focus:outline-none focus:ring-2 focus:ring-[#42BFA5] bg-[#F7FAFC]"
+                  placeholder="Add custom ingredient (e.g. Oats, Besan, Ginger)..."
+                  className="flex-1 px-3 py-2 rounded-xl border border-[#E2ECEB] text-xs focus:outline-none focus:border-[#42BFA5]"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-[#42BFA5] text-white font-bold text-xs hover:bg-[#38a892]"
+                  className="px-4 py-2 rounded-xl bg-[#42BFA5] text-white text-xs font-bold hover:bg-[#2ba98e]"
                 >
-                  Add to Pantry
+                  Add
                 </button>
               </form>
             </div>
 
-            {/* 3-Tier Results Display */}
+            {/* 3-Tier Recipe Results */}
             {loadingPantry ? (
-              <div className="p-10 text-center bg-white rounded-3xl border border-[#E2ECEB]">
-                <div className="w-8 h-8 border-4 border-[#E2ECEB] border-t-[#42BFA5] rounded-full animate-spin mx-auto mb-2" />
-                <p className="text-xs font-bold text-[#5A6D6B]">Evaluating combinations from your available items...</p>
+              <div className="p-8 text-center text-xs text-[#8E9F9D]">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#42BFA5] mb-2" />
+                Matching against authentic Indian recipes...
               </div>
-            ) : pantryResults ? (
+            ) : pantryResults && (
               <div className="space-y-6">
-                {/* Tier 1: 100% Ready */}
+                
+                {/* Tier 1: Best Available */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#218C68]" />
-                    <h3 className="font-black text-lg text-[#20312F]">Tier 1: 100% Ready to Cook (Zero Grocery Run)</h3>
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#E8F7EF] text-[#218C68] text-[10px] font-bold uppercase">
+                      Tier 1: 100% In Kitchen
+                    </span>
+                    <h3 className="font-bold text-sm text-[#20312F]">Best Available Right Now</h3>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {pantryResults.tier1_best_available?.map((rec: any) => (
-                      <div key={rec.recipe_id} className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
-                        <div className="flex items-center gap-3">
-                          <FoodImage foodName={rec.name} className="w-16 h-16 rounded-xl shrink-0" aspectRatio="square" />
-                          <div>
-                            <SuitabilityBadge status="optimal" label="100% Available" />
-                            <h4 className="font-bold text-sm text-[#20312F] mt-1">{rec.name}</h4>
-                            <p className="text-xs text-[#8E9F9D]">{rec.prep_time_minutes} min • {rec.calories_est} kcal • {rec.protein_est}g protein</p>
-                          </div>
+                    {(pantryResults.best_available || []).map((recipe: any) => (
+                      <div key={recipe.id} className="p-5 rounded-3xl bg-white border border-[#BCE8DE] card-shadow space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm text-[#20312F]">{recipe.recipe_name}</h4>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E9F8F3] text-[#177E75]">
+                            {recipe.prep_time_minutes} min
+                          </span>
                         </div>
-                        <p className="text-xs text-[#5A6D6B] leading-relaxed bg-[#F7FAFC] p-2.5 rounded-xl border border-[#EDF3F3]">
-                          {rec.explanation}
-                        </p>
-                        <button
-                          onClick={() => {
-                            setMeals([...meals, {
-                              id: Date.now(),
-                              meal_type: "lunch",
-                              items: [{ food_name: rec.name, weight_grams: 250, calories: rec.calories_est, protein: rec.protein_est, carbs: rec.carbs_est, fiber: rec.fiber_est }],
-                              total_calories: rec.calories_est,
-                              total_protein: rec.protein_est,
-                              total_carbs: rec.carbs_est,
-                              total_fiber: rec.fiber_est
-                            }]);
-                            alert(`Logged "${rec.name}" to your diary!`);
-                            setActiveTab("dashboard");
-                          }}
-                          className="w-full py-2 rounded-xl bg-[#177E75] text-white font-bold text-xs hover:bg-[#12645e]"
-                        >
-                          Cook & Log This Dish
-                        </button>
+                        <p className="text-xs text-[#5A6D6B]">{recipe.description}</p>
+                        <div className="flex items-center justify-between pt-2 border-t border-[#EDF3F3] text-xs">
+                          <span className="text-[#8E9F9D]">
+                            <strong>{recipe.matched_count}</strong> of {recipe.total_ingredients} ingredients
+                          </span>
+                          <span className="font-mono font-bold text-[#177E75]">
+                            {recipe.estimated_calories} kcal
+                          </span>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Tier 2: Near Match */}
-                {pantryResults.tier2_reasonable_alternatives?.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#377BC4]" />
-                      <h3 className="font-black text-lg text-[#20312F]">Tier 2: Minor Addition / 1 Item Missing</h3>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {pantryResults.tier2_reasonable_alternatives.map((rec: any) => (
-                        <div key={rec.recipe_id} className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
-                          <div className="flex items-center gap-3">
-                            <FoodImage foodName={rec.name} className="w-16 h-16 rounded-xl shrink-0" aspectRatio="square" />
-                            <div>
-                              <SuitabilityBadge status="good" label="Near Match" />
-                              <h4 className="font-bold text-sm text-[#20312F] mt-1">{rec.name}</h4>
-                              <p className="text-xs text-[#8E9F9D]">{rec.prep_time_minutes} min • {rec.calories_est} kcal</p>
-                            </div>
-                          </div>
-                          <p className="text-xs text-[#B87921]">
-                            <strong>Missing:</strong> {rec.missing_ingredients.join(", ")}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+                {/* Tier 2: Reasonable Alternatives */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#FFF5E5] text-[#B87921] text-[10px] font-bold uppercase">
+                      Tier 2: Minor Substitutions
+                    </span>
+                    <h3 className="font-bold text-sm text-[#20312F]">Reasonable Alternatives</h3>
                   </div>
-                )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(pantryResults.reasonable_alternatives || []).map((recipe: any) => (
+                      <div key={recipe.id} className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-sm text-[#20312F]">{recipe.recipe_name}</h4>
+                          <span className="text-[10px] font-bold text-[#8E9F9D]">{recipe.prep_time_minutes} min</span>
+                        </div>
+                        <div className="text-xs text-[#B87921]">
+                          Missing: {recipe.missing_ingredients?.join(", ")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
               </div>
-            ) : null}
+            )}
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* TAB 4: AI HEALTH COACH (INTERACTIVE CHAT)                     */}
+        {/* TAB 5: AI GROUNDED NUTRITION COACH                            */}
         {/* ============================================================== */}
         {activeTab === "coach" && (
-          <div className="max-w-3xl mx-auto h-[650px] flex flex-col bg-white rounded-3xl border border-[#E2ECEB] card-shadow p-6 animate-fade-in space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EDF3F3] pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#C5B9F5] to-[#177E75] flex items-center justify-center text-white">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-base text-[#20312F]">NutriVision AI Coach</h3>
-                  <p className="text-[11px] text-[#5A6D6B]">Grounded in your real meal diary & ICMR science</p>
-                </div>
+          <div className="max-w-3xl mx-auto space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-[#20312F]">Grounded Clinical Nutrition Coach</h2>
+                <p className="text-xs text-[#5A6D6B]">
+                  Backed by your logged meals, health records (prediabetes, BP), and ICMR-NIN 2024 standards.
+                </p>
               </div>
-              <span className="text-[10px] font-bold text-[#218C68] bg-[#E8F7EF] px-2.5 py-1 rounded-full">
-                Active Grounding
-              </span>
+              <button
+                onClick={() => setShowAISettingsModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-xs font-bold transition-all flex items-center gap-1.5"
+              >
+                <Bot className="w-3.5 h-3.5 text-purple-600" />
+                <span>{activeAIProviderName}</span>
+              </button>
             </div>
 
-            {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-              {messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={`flex items-start gap-2.5 ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}
-                >
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                    m.role === "user" ? "bg-[#177E75] text-white" : "bg-[#E9F8F3] text-[#177E75]"
-                  }`}>
-                    {m.role === "user" ? "AS" : "AI"}
-                  </div>
-                  <div className={`max-w-lg p-3.5 rounded-2xl text-xs leading-relaxed ${
-                    m.role === "user"
-                      ? "bg-[#177E75] text-white rounded-tr-xs"
-                      : "bg-[#F7FAFC] border border-[#E2ECEB] text-[#20312F] rounded-tl-xs space-y-2"
-                  }`}>
-                    <div className="whitespace-pre-line">{m.content}</div>
+            {/* Chat History Container */}
+            <div className="bg-white rounded-3xl border border-[#E2ECEB] card-shadow h-[480px] flex flex-col overflow-hidden">
+              <div className="flex-1 p-6 overflow-y-auto space-y-4">
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+                  >
+                    <div
+                      className={`max-w-[85%] p-4 rounded-3xl text-xs leading-relaxed whitespace-pre-wrap ${
+                        msg.role === "user"
+                          ? "bg-[#177E75] text-white rounded-br-none"
+                          : "bg-[#F7FAFC] text-[#20312F] border border-[#E2ECEB] rounded-bl-none"
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
 
-                    {m.suggested_followups && (
-                      <div className="pt-2 border-t border-[#EDF3F3] flex flex-wrap gap-1">
-                        {m.suggested_followups.map((prompt: string) => (
+                    {/* Suggested follow-up prompt pills */}
+                    {msg.suggested_followups && msg.suggested_followups.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {msg.suggested_followups.map((prompt: string, pIdx: number) => (
                           <button
-                            key={prompt}
+                            key={pIdx}
                             onClick={() => handleSendMessage(prompt)}
-                            className="text-[11px] bg-white border border-[#E2ECEB] text-[#177E75] px-2 py-0.5 rounded-md hover:bg-[#E9F8F3]"
+                            className="px-2.5 py-1 rounded-full bg-[#E9F8F3] hover:bg-[#d5f3e7] text-[#177E75] font-bold text-[10px] transition-colors"
                           >
-                            {prompt} →
+                            + {prompt}
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
-                </div>
-              ))}
-              {sendingMsg && (
-                <div className="text-xs text-[#8E9F9D] flex items-center gap-1.5 p-2">
-                  <div className="w-2 h-2 rounded-full bg-[#42BFA5] animate-ping" />
-                  <span>AI Coach is computing response from verified tables...</span>
-                </div>
-              )}
-              <div ref={chatBottomRef} />
-            </div>
+                ))}
+                {sendingMsg && (
+                  <div className="flex items-center gap-2 text-xs text-[#8E9F9D]">
+                    <Sparkles className="w-3.5 h-3.5 animate-spin text-[#42BFA5]" />
+                    <span>Coach is consulting ICMR-NIN guidelines & your profile...</span>
+                  </div>
+                )}
+                <div ref={chatBottomRef} />
+              </div>
 
-            {/* Chat Input */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendMessage(inputMessage);
-              }}
-              className="flex gap-2 pt-2 border-t border-[#EDF3F3]"
-            >
-              <input
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask about protein, what to cook with available food, or glycemic index..."
-                className="flex-1 px-4 py-2.5 rounded-xl border border-[#E2ECEB] text-xs focus:outline-none focus:ring-2 focus:ring-[#42BFA5] bg-[#F7FAFC]"
-              />
-              <button
-                type="submit"
-                disabled={sendingMsg || !inputMessage.trim()}
-                className="px-4 py-2.5 rounded-xl bg-[#177E75] text-white font-bold text-xs hover:bg-[#12645e] transition-colors"
-              >
-                Send
-              </button>
-            </form>
+              {/* Chat Input Bar */}
+              <div className="p-3 border-t border-[#E2ECEB] bg-[#F7FAFC] flex gap-2">
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendMessage(inputMessage)}
+                  placeholder="Ask your coach anything about Indian meals, portion math, or what to cook..."
+                  className="flex-1 px-4 py-2.5 rounded-2xl border border-[#E2ECEB] text-xs bg-white focus:outline-none focus:border-[#42BFA5]"
+                />
+                <button
+                  onClick={() => handleSendMessage(inputMessage)}
+                  disabled={sendingMsg || !inputMessage.trim()}
+                  className="px-5 py-2.5 rounded-2xl bg-[#177E75] hover:bg-[#126861] text-white text-xs font-bold shadow-xs transition-all disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* TAB 5: FOOD DATABASE EXPLORER & PORTION CALCULATOR             */}
+        {/* TAB 6: FOOD DATABASE EXPLORER                                 */}
         {/* ============================================================== */}
         {activeTab === "database" && (
-          <div className="max-w-5xl mx-auto space-y-6 animate-fade-in">
+          <div className="space-y-6 animate-fade-in">
             <div>
-              <h2 className="text-2xl font-black text-[#20312F]">ICMR-NIN Food Database & Calculator</h2>
+              <h2 className="text-xl font-bold text-[#20312F]">ICMR-NIN 2024 Indian Food Database</h2>
               <p className="text-xs text-[#5A6D6B] mt-0.5">
                 Search verified Indian food records and calculate deterministic nutrients for customized weights.
               </p>
@@ -958,7 +1053,7 @@ export default function NutriVisionWebApp() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search food by English, Hindi, or Tamil name (e.g. Roti, Idli, Dal, Curd)..."
+                placeholder="Search food by English, Hindi, or Tamil name (e.g. Roti, Idli, Dal, Curd, Paneer, Chicken)..."
                 className="w-full px-2 py-1 text-xs focus:outline-none"
               />
             </div>
@@ -1003,7 +1098,14 @@ export default function NutriVisionWebApp() {
                         setMeals([...meals, {
                           id: Date.now(),
                           meal_type: "snack",
-                          items: [{ food_name: f.name, weight_grams: f.default_serving_grams, calories: f.calories_per_100g * (f.default_serving_grams / 100), protein: f.protein_per_100g * (f.default_serving_grams / 100), carbs: f.carbs_per_100g * (f.default_serving_grams / 100), fiber: f.fiber_per_100g * (f.default_serving_grams / 100) }],
+                          items: [{ 
+                            food_name: f.name, 
+                            weight_grams: f.default_serving_grams, 
+                            calories: f.calories_per_100g * (f.default_serving_grams / 100), 
+                            protein: f.protein_per_100g * (f.default_serving_grams / 100), 
+                            carbs: f.carbs_per_100g * (f.default_serving_grams / 100), 
+                            fiber: f.fiber_per_100g * (f.default_serving_grams / 100) 
+                          }],
                           total_calories: Number((f.calories_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
                           total_protein: Number((f.protein_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
                           total_carbs: Number((f.carbs_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
@@ -1012,7 +1114,7 @@ export default function NutriVisionWebApp() {
                         alert(`Added "${f.name}" to today's diary!`);
                         setActiveTab("dashboard");
                       }}
-                      className="w-full py-2 rounded-xl bg-[#E9F8F3] text-[#177E75] font-bold text-xs hover:bg-[#d5f3e7]"
+                      className="w-full py-2 rounded-xl bg-[#E9F8F3] text-[#177E75] font-bold text-xs hover:bg-[#d5f3e7] transition-colors"
                     >
                       + Quick Log Standard Serving
                     </button>
@@ -1023,6 +1125,26 @@ export default function NutriVisionWebApp() {
         )}
 
       </main>
+
+      {/* Global Modals */}
+      <MedicalProfileModal
+        isOpen={showMedicalModal}
+        onClose={() => setShowMedicalModal(false)}
+        onProfileUpdated={(updated) => setMedicalProfile(updated)}
+      />
+
+      <AISettingsModal
+        isOpen={showAISettingsModal}
+        onClose={() => setShowAISettingsModal(false)}
+        onConfigSaved={(conf) => {
+          setActiveAIProviderName(
+            conf.provider === "openai" ? "OpenAI GPT-4o" :
+            conf.provider === "gemini" ? "Google Gemini" :
+            conf.provider === "local" ? "Local Ollama" : "Smart Auto"
+          );
+        }}
+      />
+
     </div>
   );
 }
