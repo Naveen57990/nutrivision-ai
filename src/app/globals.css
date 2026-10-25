@@ -3,43 +3,44 @@
 :root {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   
-  /* Primary & Brand */
-  --primary-mint: #42BFA5;
-  --primary-mint-hover: #38a892;
-  --deep-teal: #177E75;
-  --soft-mint-bg: #E9F8F3;
-  --pale-aqua: #F0FBFA;
+  /* Cozy Warm-Cool Cute Aesthetic Palette */
+  --primary-mint: #3db89f;
+  --primary-mint-hover: #329f88;
+  --deep-teal: #147269;
+  --soft-mint-bg: #EAF8F4;
+  --pale-aqua: #F2FCF9;
 
-  /* Secondary Accents */
-  --soft-blue: #8BCBF0;
-  --pale-blue-bg: #EEF7FF;
-  --cool-lavender: #C5B9F5;
-  --pale-lavender-bg: #F5F2FF;
+  /* Cozy Pastel Accents */
+  --warm-peach: #F6A374;
+  --warm-peach-bg: #FFF3EB;
+  --soft-amber: #E8A348;
+  --soft-amber-bg: #FEF7EE;
+  --cozy-cream: #FCFAF6;
+  --notebook-border: #E8DCCF;
 
-  /* Neutrals */
-  --main-bg: #F7FAFC;
+  --soft-blue: #70B8F0;
+  --pale-blue-bg: #EFF7FE;
+  --cool-lavender: #BDB0F2;
+  --pale-lavender-bg: #F6F3FF;
+
+  /* Warm Espresso Neutrals */
+  --main-bg: #FAF7F2;
   --card-bg: #FFFFFF;
-  --text-primary: #20312F;
-  --text-secondary: #5A6D6B;
-  --text-muted: #8E9F9D;
-  --border-color: #E2ECEB;
-  --divider-color: #EDF3F3;
+  --text-primary: #2C2016;
+  --text-secondary: #5F4E40;
+  --text-muted: #8F7D6E;
+  --border-color: #E8DCCF;
+  --divider-color: #F0E6DB;
 
   /* Semantics */
-  --semantic-success: #218C68;
-  --semantic-success-bg: #E8F7EF;
-  --semantic-warning: #B87921;
+  --semantic-success: #1D8A66;
+  --semantic-success-bg: #E7F7F0;
+  --semantic-warning: #C27D23;
   --semantic-warning-bg: #FFF5E5;
-  --semantic-error: #C94B53;
-  --semantic-error-bg: #FFF0F1;
-  --semantic-info: #377BC4;
-  --semantic-info-bg: #EDF5FF;
-
-  /* Layout & Radii */
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
+  --semantic-error: #D0535B;
+  --semantic-error-bg: #FFF1F2;
+  --semantic-info: #357EC7;
+  --semantic-info-bg: #EDF6FF;
 }
 
 body {
@@ -48,23 +49,59 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(66, 191, 165, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(246, 163, 116, 0.08) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(139, 203, 240, 0.06) 0px, transparent 50%);
+  background-attachment: fixed;
 }
 
 /* Subtle, polished shadows */
 .card-shadow {
-  box-shadow: 0 4px 20px -2px rgba(32, 49, 47, 0.05), 0 2px 6px -1px rgba(32, 49, 47, 0.03);
+  box-shadow: 0 4px 20px -2px rgba(44, 32, 22, 0.05), 0 2px 6px -1px rgba(44, 32, 22, 0.03);
 }
 
 .card-shadow-hover {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .card-shadow-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px -4px rgba(23, 126, 117, 0.08), 0 4px 10px -2px rgba(23, 126, 117, 0.04);
+  box-shadow: 0 10px 25px -4px rgba(20, 114, 105, 0.09), 0 4px 10px -2px rgba(20, 114, 105, 0.04);
 }
 
-/* Custom scrollbars */
+/* Cute Floating Bob Animation */
+@keyframes cuteFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(1deg);
+  }
+}
+
+.animate-cute-float {
+  animation: cuteFloat 4s ease-in-out infinite;
+}
+
+/* Liquid Wave Pulse */
+@keyframes liquidWave {
+  0%, 100% {
+    border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  }
+  34% {
+    border-radius: 70% 30% 50% 50% / 30% 30% 70% 70%;
+  }
+  67% {
+    border-radius: 100% 60% 60% 100% / 100% 100% 60% 60%;
+  }
+}
+
+.animate-liquid-wave {
+  animation: liquidWave 6s ease-in-out infinite;
+}
+
+/* Custom aesthetic scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -73,9 +110,9 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbdcdb;
+  background: #D7C6B6;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a9c4c2;
+  background: #BBA794;
 }

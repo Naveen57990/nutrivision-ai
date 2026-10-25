@@ -48,12 +48,8 @@ export default function CuteWaterTracker({
       if (saved) {
         setEntries(JSON.parse(saved));
       } else {
-        // Sample starter records for a fresh day
-        const initial = [
-          { id: "w-1", amountMl: 300, timeStr: "08:15 AM", timestamp: Date.now() - 1000 * 60 * 180 },
-          { id: "w-2", amountMl: 500, timeStr: "11:30 AM", timestamp: Date.now() - 1000 * 60 * 60 },
-        ];
-        setEntries(initial);
+        // Start fresh with 0 ml - only real data logged by user
+        setEntries([]);
       }
     } catch {}
   }, []);

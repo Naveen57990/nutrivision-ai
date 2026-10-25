@@ -38,33 +38,8 @@ import CuteFloatingCoachBuddy from "@/components/CuteFloatingCoachBuddy";
 import { ApiClient } from "@/lib/api";
 import { DISH_DATABASE } from "@/lib/recipe_database";
 
-// Initial Logged Meals for Today
-const INITIAL_MEALS = [
-  {
-    id: 1,
-    meal_type: "breakfast",
-    items: [
-      { food_name: "Steamed Idli (2 pcs)", weight_grams: 80, calories: 116, protein: 3.2, carbs: 24, fiber: 1.3 },
-      { food_name: "Vegetable Sambar (1 katori)", weight_grams: 150, calories: 117, protein: 4.6, carbs: 18, fiber: 4.8 }
-    ],
-    total_calories: 233,
-    total_protein: 7.8,
-    total_carbs: 42,
-    total_fiber: 6.1
-  },
-  {
-    id: 2,
-    meal_type: "lunch",
-    items: [
-      { food_name: "Whole Wheat Chapati (2 rotis)", weight_grams: 70, calories: 210, protein: 6.2, carbs: 42, fiber: 6.6 },
-      { food_name: "Moong Dal Tadka (1 katori)", weight_grams: 150, calories: 165, protein: 9.4, carbs: 22.5, fiber: 5.7 }
-    ],
-    total_calories: 375,
-    total_protein: 15.6,
-    total_carbs: 64.5,
-    total_fiber: 12.3
-  }
-];
+// Initial Logged Meals for Today (Zero Demo Data - Real Data Only)
+const INITIAL_MEALS: any[] = [];
 
 const INITIAL_PROFILE: UserMedicalProfile = {
   age: 29,
@@ -104,8 +79,8 @@ export default function NutriVisionWebApp() {
   const [showAISettingsModal, setShowAISettingsModal] = useState(false);
   const [activeAIProviderName, setActiveAIProviderName] = useState("Smart Auto");
 
-  // Daily Tracker State
-  const [meals, setMeals] = useState<any[]>(INITIAL_MEALS);
+  // Daily Tracker State (Real data only, default empty)
+  const [meals, setMeals] = useState<any[]>([]);
 
   // Food Database Explorer State
   const [foods, setFoods] = useState<any[]>([]);
@@ -120,12 +95,16 @@ export default function NutriVisionWebApp() {
   const totalFiber = Number(meals.reduce((acc, m) => acc + m.total_fiber, 0).toFixed(1));
   const totalFat = Number((totalCalories * 0.25 / 9).toFixed(1));
 
-  // Initialize on mount
+  // Initialize on mount: load real data only
   useEffect(() => {
     try {
       const savedProfile = localStorage.getItem("nutrivision_user_profile");
       if (savedProfile) {
         setMedicalProfile(JSON.parse(savedProfile));
+      }
+      const savedMeals = localStorage.getItem("nutrivision_user_real_meals");
+      if (savedMeals) {
+        setMeals(JSON.parse(savedMeals));
       }
       const aiConf = ApiClient.getAIConfig();
       if (aiConf?.provider) {
@@ -142,6 +121,53 @@ export default function NutriVisionWebApp() {
       .then((data) => setFoods(data))
       .catch(() => {});
   }, []);
+
+  // Universal Log Meal Handler
+  const handleLogMeal = (meal: any) => {
+    const newMeal = { id: Date.now(), ...meal };
+    setMeals((prev) => {
+      const updated = [...prev, newMeal];
+      try {
+        localStorage.setItem("nutrivision_user_real_meals", JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // Also sync to Cute Health Diary records for today
+    try {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const savedDiary = localStorage.getItem("nutrivision_real_diary_records_v3");
+      const records = savedDiary ? JSON.parse(savedDiary) : {};
+      const existingToday = records[todayStr] || {
+        date: todayStr,
+        display_date: new Date().toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric" }) + " (Today)",
+        water_ml: 0,
+        water_target_ml: medicalProfile.daily_water_target_ml || 2500,
+        meals: [],
+        reflection_note: ""
+      };
+
+      const newFoodItem = {
+        id: "food-" + Date.now(),
+        name: meal.items?.[0]?.food_name || meal.dish_name || "Custom Dish",
+        meal_slot: meal.meal_type || "breakfast",
+        calories: meal.total_calories || meal.calories || 0,
+        protein_g: meal.total_protein || meal.protein || 0,
+        carbs_g: meal.total_carbs || meal.carbs || 0,
+        fiber_g: meal.total_fiber || meal.fiber || 0,
+        portion: "1 serving",
+        time_logged: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      };
+
+      records[todayStr] = {
+        ...existingToday,
+        meals: [...existingToday.meals, newFoodItem]
+      };
+      localStorage.setItem("nutrivision_real_diary_records_v3", JSON.stringify(records));
+    } catch (e) {
+      console.error("Diary sync error:", e);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F7FAFC] text-[#20312F] flex flex-col font-sans relative">
@@ -169,13 +195,12 @@ export default function NutriVisionWebApp() {
           </div>
 
           {/* Mode Switcher Tabs (Desktop) */}
-          <nav className="hidden md:flex items-center gap-1.5 bg-[#F7FAFC] p-1.5 rounded-2xl border border-[#E2ECEB]">
+          <nav className="hidden md:flex items-center gap-1.5 bg-[#F6EFE7]/80 p-1.5 rounded-2xl border border-[#E8DCCF]">
             {[
-              { id: "food_intelligence", label: "AI Food Studio", icon: ChefHat },
-              { id: "diary", label: "Cute Diary", icon: BookOpen },
-              { id: "dashboard", label: "Daily Tracker", icon: LayoutDashboard },
-              { id: "water", label: "Pure Water", icon: Droplet },
-              { id: "database", label: "Food Database", icon: Search }
+              { id: "food_intelligence", label: "🍳 AI Food Studio", icon: ChefHat },
+              { id: "diary", label: "📖 Cute Diary & Tracker", icon: BookOpen },
+              { id: "water", label: "💧 Pure Water", icon: Droplet },
+              { id: "database", label: "🍲 Food Database", icon: Search }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -183,13 +208,13 @@ export default function NutriVisionWebApp() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isActive
-                      ? "bg-white text-[#177E75] shadow-xs ring-1 ring-teal-500/10"
-                      : "text-[#5A6D6B] hover:text-[#20312F] hover:bg-white/50"
+                      ? "bg-white text-[#147269] shadow-xs ring-1 ring-teal-500/20"
+                      : "text-[#5F4E40] hover:text-[#2C2016] hover:bg-white/60"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? "text-[#42BFA5]" : "text-[#8E9F9D]"}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? "text-[#3db89f]" : "text-[#8F7D6E]"}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -232,11 +257,10 @@ export default function NutriVisionWebApp() {
         </div>
 
         {/* Mobile Navigation Rail */}
-        <div className="md:hidden flex items-center justify-around border-t border-[#EDF3F3] bg-white px-2 py-2">
+        <div className="md:hidden flex items-center justify-around border-t border-[#EADBCE] bg-white px-2 py-2">
           {[
             { id: "food_intelligence", label: "Studio", icon: ChefHat },
-            { id: "diary", label: "Diary", icon: BookOpen },
-            { id: "dashboard", label: "Tracker", icon: LayoutDashboard },
+            { id: "diary", label: "Diary & Tracker", icon: BookOpen },
             { id: "water", label: "Water", icon: Droplet },
             { id: "database", label: "Foods", icon: Search }
           ].map((tab) => {
@@ -271,16 +295,18 @@ export default function NutriVisionWebApp() {
               onOpenProfile={() => setShowMedicalModal(true)}
               onOpenAISettings={() => setShowAISettingsModal(true)}
               onLogMeal={(meal) => {
-                setMeals([...meals, { id: Date.now(), ...meal }]);
+                handleLogMeal(meal);
+                alert(`Logged "${meal.items?.[0]?.food_name || "Meal"}" to your Cute Diary & Tracker!`);
+                setActiveTab("diary");
               }}
             />
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* TAB 2: CUTE FLIP-PAGE HEALTH DIARY                            */}
+        {/* TAB 2: CUTE FLIP-PAGE HEALTH DIARY & EMBEDDED DAILY TRACKER   */}
         {/* ============================================================== */}
-        {activeTab === "diary" && (
+        {(activeTab === "diary" || (activeTab as any) === "dashboard") && (
           <div className="space-y-6 animate-fade-in">
             <CuteHealthDiary
               userProfile={medicalProfile}
@@ -288,148 +314,6 @@ export default function NutriVisionWebApp() {
                 setActiveTab("food_intelligence");
               }}
             />
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* TAB 3: DASHBOARD & DAILY TRACKER                              */}
-        {/* ============================================================== */}
-        {activeTab === "dashboard" && (
-          <div className="space-y-8 animate-fade-in">
-            
-            {/* Top Greeting & Banner */}
-            <div className="bg-gradient-to-r from-[#42BFA5] via-[#2ba98e] to-[#177E75] rounded-3xl p-6 sm:p-8 text-white card-shadow flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="space-y-2 max-w-xl">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-[#E9F8F3]">
-                  Personalized Nutrition Intelligence
-                </span>
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight leading-snug">
-                  Welcome back, Aarav.
-                </h1>
-                <p className="text-sm text-[#F0FBFA] leading-relaxed">
-                  You have consumed <strong className="text-white">{totalCalories} kcal</strong> and <strong className="text-white">{totalProtein}g protein</strong> today. Your clinical ICMR target is <strong className="text-white">{medicalProfile.daily_protein_target_g}g protein</strong>.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2.5">
-                <button
-                  onClick={() => setActiveTab("food_intelligence")}
-                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white text-[#177E75] font-bold text-xs shadow-md hover:bg-[#F0FBFA] transition-all"
-                >
-                  <ChefHat className="w-4 h-4 text-[#42BFA5]" />
-                  <span>AI Food Studio</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("water")}
-                  className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 text-white font-bold text-xs hover:bg-white/30 transition-all"
-                >
-                  <Droplet className="w-4 h-4" />
-                  <span>Log Water</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Daily Nutrition Summary Gauges */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-[#20312F]">Today’s Macro & Calorie Targets</h2>
-                <span className="text-xs font-semibold text-[#8E9F9D]">
-                  Calibrated for {medicalProfile.primary_goal.replace(/_/g, " ")} ({medicalProfile.weight_kg}kg)
-                </span>
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
-                <MacroGauge label="Calories" current={totalCalories} target={medicalProfile.daily_calorie_target} unit="kcal" colorHex="#177E75" bgHex="#E9F8F3" />
-                <MacroGauge label="Protein" current={totalProtein} target={medicalProfile.daily_protein_target_g} unit="g" colorHex="#42BFA5" bgHex="#E9F8F3" />
-                <MacroGauge label="Carbs" current={totalCarbs} target={medicalProfile.daily_carb_target_g} unit="g" colorHex="#377BC4" bgHex="#EDF5FF" />
-                <MacroGauge label="Fat" current={totalFat} target={medicalProfile.daily_fat_target_g} unit="g" colorHex="#B87921" bgHex="#FFF5E5" />
-                <MacroGauge label="Fiber" current={totalFiber} target={medicalProfile.daily_fiber_target_g} unit="g" colorHex="#218C68" bgHex="#E8F7EF" />
-              </div>
-            </div>
-
-            {/* Cute Water Tracker directly on Dashboard */}
-            <CuteWaterTracker 
-              userWeightKg={medicalProfile.weight_kg} 
-              dailyTargetMl={medicalProfile.daily_water_target_ml} 
-            />
-
-            {/* Grid: Meals Diary & Weekly Caloric Consistency */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column: Today's Logged Meals Diary */}
-              <div className="lg:col-span-7 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-[#20312F]">Today’s Meal Diary</h3>
-                  <button
-                    onClick={() => setActiveTab("food_intelligence")}
-                    className="text-xs font-bold text-[#177E75] hover:underline flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> What Can I Make?
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {meals.map((meal) => (
-                    <div key={meal.id} className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#42BFA5]" />
-                          <h4 className="font-bold text-sm capitalize text-[#20312F]">{meal.meal_type}</h4>
-                        </div>
-                        <span className="text-xs font-extrabold text-[#177E75] font-mono">
-                          {meal.total_calories} kcal
-                        </span>
-                      </div>
-
-                      <div className="divide-y divide-slate-100">
-                        {meal.items.map((item: any, iIdx: number) => (
-                          <div key={iIdx} className="py-2 flex items-center justify-between text-xs">
-                            <span className="text-[#5A6D6B] font-medium">{item.food_name}</span>
-                            <span className="text-[#8E9F9D] font-mono">{item.calories} kcal ({item.protein}g P)</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-[#5A6D6B]">
-                        <span>Protein: <strong>{meal.total_protein}g</strong></span>
-                        <span>Carbs: <strong>{meal.total_carbs}g</strong></span>
-                        <span>Fiber: <strong>{meal.total_fiber}g</strong></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Right Column: Weekly Trend */}
-              <div className="lg:col-span-5 space-y-4">
-                <h3 className="text-base font-bold text-[#20312F]">Weekly Consistency</h3>
-                <div className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-4">
-                  <div className="h-56 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={[
-                        { day: "Mon", kcal: 1980, target: medicalProfile.daily_calorie_target },
-                        { day: "Tue", kcal: 2050, target: medicalProfile.daily_calorie_target },
-                        { day: "Wed", kcal: 1890, target: medicalProfile.daily_calorie_target },
-                        { day: "Thu", kcal: 2110, target: medicalProfile.daily_calorie_target },
-                        { day: "Fri", kcal: 1950, target: medicalProfile.daily_calorie_target },
-                        { day: "Sat", kcal: 2020, target: medicalProfile.daily_calorie_target },
-                        { day: "Sun", kcal: totalCalories, target: medicalProfile.daily_calorie_target }
-                      ]}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EDF3F3" />
-                        <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} domain={[1200, 2400]} />
-                        <Tooltip />
-                        <Bar dataKey="kcal" fill="#42BFA5" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="text-xs text-[#5A6D6B] bg-[#E9F8F3] p-3 rounded-2xl flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-[#218C68] shrink-0 mt-0.5" />
-                    <span>You have remained within your ICMR target window for 6 of the last 7 days!</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
           </div>
         )}
 
@@ -588,8 +472,7 @@ export default function NutriVisionWebApp() {
 
                       <button
                         onClick={() => {
-                          setMeals([...meals, {
-                            id: Date.now(),
+                          handleLogMeal({
                             meal_type: dish.meal_types[0] || "lunch",
                             items: [{
                               food_name: dish.name,
@@ -603,13 +486,13 @@ export default function NutriVisionWebApp() {
                             total_protein: dish.protein_g,
                             total_carbs: dish.carbs_g,
                             total_fiber: dish.fiber_g
-                          }]);
-                          alert(`Added "${dish.name}" to today's diary!`);
-                          setActiveTab("dashboard");
+                          });
+                          alert(`Added "${dish.name}" to your Cute Diary & Tracker!`);
+                          setActiveTab("diary");
                         }}
-                        className="w-full mt-3 py-2.5 rounded-xl bg-[#E9F8F3] hover:bg-[#d5f3e7] text-[#177E75] font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                        className="w-full mt-3 py-2.5 rounded-xl bg-[#E9F8F3] hover:bg-[#d5f3e7] text-[#177E75] font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Log This Dish
+                        <Plus className="w-3.5 h-3.5" /> Log This Dish to Diary
                       </button>
                     </div>
                   ))}
