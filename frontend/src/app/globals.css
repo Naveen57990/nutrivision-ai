@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Primary & Brand */
+  --primary-mint: #42BFA5;
+  --primary-mint-hover: #38a892;
+  --deep-teal: #177E75;
+  --soft-mint-bg: #E9F8F3;
+  --pale-aqua: #F0FBFA;
+
+  /* Secondary Accents */
+  --soft-blue: #8BCBF0;
+  --pale-blue-bg: #EEF7FF;
+  --cool-lavender: #C5B9F5;
+  --pale-lavender-bg: #F5F2FF;
+
+  /* Neutrals */
+  --main-bg: #F7FAFC;
+  --card-bg: #FFFFFF;
+  --text-primary: #20312F;
+  --text-secondary: #5A6D6B;
+  --text-muted: #8E9F9D;
+  --border-color: #E2ECEB;
+  --divider-color: #EDF3F3;
+
+  /* Semantics */
+  --semantic-success: #218C68;
+  --semantic-success-bg: #E8F7EF;
+  --semantic-warning: #B87921;
+  --semantic-warning-bg: #FFF5E5;
+  --semantic-error: #C94B53;
+  --semantic-error-bg: #FFF0F1;
+  --semantic-info: #377BC4;
+  --semantic-info-bg: #EDF5FF;
+
+  /* Layout & Radii */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+}
+
+body {
+  background-color: var(--main-bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle, polished shadows */
+.card-shadow {
+  box-shadow: 0 4px 20px -2px rgba(32, 49, 47, 0.05), 0 2px 6px -1px rgba(32, 49, 47, 0.03);
+}
+
+.card-shadow-hover {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-shadow-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -4px rgba(23, 126, 117, 0.08), 0 4px 10px -2px rgba(23, 126, 117, 0.04);
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbdcdb;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a9c4c2;
+}
