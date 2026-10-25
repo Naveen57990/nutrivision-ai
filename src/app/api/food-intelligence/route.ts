@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DISH_DATABASE, matchDishesFromDatabase } from "@/lib/recipe_database";
+import { matchDishesFromDatabase } from "@/lib/recipe_database";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,17 +9,15 @@ export async function POST(req: NextRequest) {
       rawInput = "",
       dishName = "",
       userProfile = {},
-      dietaryPreference = "vegetarian"
+      dietaryPreference = "vegetarian",
+      mealType = "breakfast" // "breakfast" | "lunch" | "dinner" | "snack"
     } = body;
 
     const inputString = (rawInput || dishName || ingredients.join(", ")).trim();
+    const mealLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
 
     // AI Provider Configuration
     const provider = req.headers.get("x-ai-provider") || body.provider || "local";
-    const openaiKey = req.headers.get("x-openai-key") || body.openaiApiKey || process.env.OPENAI_API_KEY || "";
-    const openaiModel = req.headers.get("x-openai-model") || body.openaiModel || process.env.OPENAI_MODEL || "gpt-4o";
-    const geminiKey = req.headers.get("x-gemini-key") || body.geminiApiKey || process.env.GEMINI_API_KEY || "";
-    const geminiModel = req.headers.get("x-gemini-model") || body.geminiModel || process.env.GEMINI_MODEL || "gemini-1.5-flash";
     const localUrl = (req.headers.get("x-local-llm-url") || body.localLlmUrl || process.env.LOCAL_LLM_URL || "http://localhost:11434").replace(/\/+$/, "");
 
     // User profile parameters
@@ -35,12 +33,14 @@ export async function POST(req: NextRequest) {
     const targetCalories = userProfile.daily_calorie_target || 2050;
     const targetProtein = userProfile.daily_protein_target_g || 78;
 
-    // 1. Get pre-matched candidates from our extensive 50+ recipe database
+    // 1. Pre-fetch database matches as fallback and complementary ideas
     const databaseMatches = matchDishesFromDatabase(inputString, diet, goal, weightKg, conditions);
 
-    // 2. Query Local LLM (Ollama) with candidate context to generate rich, personalized options
+    // 2. Real-time On-the-spot AI generation via Local Ollama
     let localLlmSuccess = false;
-    let localLlmRecommendations: any[] = [];
+    let topRecommendation: any = null;
+    let allRecommendations: any[] = [];
+    let activeModelName = "qwen2.5vl:3b (On-The-Spot AI)";
 
     try {
       const tagsRes = await fetch(`${localUrl}/api/tags`, { signal: AbortSignal.timeout(2000) }).catch(() => null);
@@ -55,57 +55,77 @@ export async function POST(req: NextRequest) {
           else chosenModel = availableModels[0] || "qwen2.5vl:3b";
         }
 
-        const candidateNames = databaseMatches.map(d => d.dish_name).join("; ");
-
-        const prompt = `You are NutriVision's Clinical Nutrition & Culinary AI grounded in ICMR-NIN 2024.
-The user provided these EXACT ingredients: "${inputString}".
-Dietary Preference: ${isVeg ? "STRICTLY VEGETARIAN (No eggs, meat, chicken, or fish)" : "NON-VEGETARIAN (Can include eggs, chicken, fish, or veg)"}.
+        const prompt = `You are NutriVision's Clinical AI Chef grounded in ICMR-NIN 2024.
+User provided EXACT ingredients: "${inputString}".
+Target Meal Slot: ${mealLabel.toUpperCase()} (e.g. Breakfast, Lunch, Dinner, Snack).
+Dietary Filter: ${isVeg ? "STRICT VEGETARIAN (No eggs, meat, chicken, or fish)" : "NON-VEGETARIAN (Eggs, chicken, fish allowed)"}.
 User: Age ${age}, Weight ${weightKg}kg, Goal: ${goalLabel.toUpperCase()}, Medical Conditions: ${conditions.join(", ")}.
-Candidate ideas to consider: ${candidateNames}.
 
 CRITICAL TASK:
-Suggest 3-4 diverse, authentic, delicious dishes that primarily use "${inputString}".
-For EVERY dish, you MUST explicitly explain in plain words: "HOW THIS WILL HELP YOU IN YOUR GOAL (${goalLabel}) AND HEALTH CONDITIONS (${conditions.join(', ')})".
+Generate 5 authentic dishes specifically appropriate for ${mealLabel.toUpperCase()} strictly using the ingredients "${inputString}".
+Select ONE dish as your absolute #1 TOP RECOMMENDATION ("top_recommendation") and provide 4 other options ("other_options").
+Explain explicitly in plain words why it is the top pick and how it helps their ${goalLabel} goal and ${conditions.join(', ')}.
 
-Respond ONLY with valid JSON in this schema:
+Respond ONLY with valid JSON in this exact structure:
 {
-  "summary": "Short 1-line description of how these meals use the provided ingredients",
-  "recommendations": [
+  "summary": "Created 5 authentic ${mealLabel} meals tailored to your ingredients",
+  "top_recommendation": {
+    "dish_name": "Authentic dish name",
+    "why_top_pick": "Why this is your #1 best choice for ${goalLabel} and ${conditions.join(', ')}",
+    "prep_time_minutes": 12,
+    "difficulty": "Easy",
+    "is_vegetarian": ${isVeg ? "true" : "false"},
+    "ingredients_used": ["Matching ingredients from: ${inputString}"],
+    "missing_ingredients": ["Salt", "Oil"],
+    "portion_guidance": {
+      "serving_size": "e.g. 1 plate / 2 slices",
+      "household_measure": "Household measure",
+      "reasoning": "Portion rationale for ${weightKg}kg weight and ${conditions.join(', ')}"
+    },
+    "nutrition": {
+      "calories": 360,
+      "protein_g": 22.0,
+      "carbs_g": 32.0,
+      "fat_g": 12.0,
+      "fiber_g": 5.5,
+      "sodium_mg": 310
+    },
+    "goal_impact": {
+      "goal_name": "${goalLabel}",
+      "helps_in_goal": "This will help you in ${goalLabel} by delivering high protein / controlled calories...",
+      "helps_in_conditions": "This will help you in ${conditions.join(', ')} by maintaining low glycemic response and low sodium...",
+      "benefit_badges": ["High Protein", "Low GI", "Heart Safe"]
+    },
+    "quick_steps": ["Step 1...", "Step 2..."]
+  },
+  "other_options": [
     {
-      "dish_name": "Authentic dish name",
-      "is_vegetarian": ${isVeg ? "true" : "false"},
+      "dish_name": "Second dish name",
       "prep_time_minutes": 15,
       "difficulty": "Easy",
-      "ingredients_used": ["Matching ingredients from: ${inputString}"],
-      "missing_ingredients": ["Salt", "Oil", "Spices"],
+      "is_vegetarian": ${isVeg ? "true" : "false"},
+      "ingredients_used": ["..."],
+      "missing_ingredients": ["..."],
       "portion_guidance": {
-        "serving_size": "e.g. 1.5 katori + 2 rotis",
-        "household_measure": "Household measure",
-        "reasoning": "Clinical rationale for user's ${weightKg}kg weight and ${conditions.join(', ')}."
+        "serving_size": "1 serving",
+        "household_measure": "1 bowl",
+        "reasoning": "Portion guidance..."
       },
       "nutrition": {
-        "calories": 380,
-        "protein_g": 22.0,
-        "carbs_g": 35.0,
-        "fat_g": 12.0,
-        "fiber_g": 6.5,
-        "sodium_mg": 320
+        "calories": 320,
+        "protein_g": 18.0,
+        "carbs_g": 28.0,
+        "fat_g": 10.0,
+        "fiber_g": 4.5,
+        "sodium_mg": 280
       },
       "goal_impact": {
         "goal_name": "${goalLabel}",
-        "summary": "This will help you in your ${goalLabel} goal...",
-        "how_it_helps": "This dish will help you in your ${goalLabel} goal by providing...",
-        "helps_in_goal": "This will help you in ${goalLabel} by delivering high protein / controlled calories...",
-        "helps_in_conditions": "This will help you in ${conditions.join(', ')} by maintaining low glycemic response and low sodium...",
-        "benefit_badges": ["Prevents Glucose Spikes", "High Protein", "Heart Safe"],
-        "medical_suitability": "ideal",
-        "medical_notes": "Safe and beneficial for ${conditions.join(', ')}."
+        "helps_in_goal": "...",
+        "helps_in_conditions": "...",
+        "benefit_badges": ["Clean Energy"]
       },
-      "quick_steps": [
-        "Step 1...",
-        "Step 2...",
-        "Step 3..."
-      ]
+      "quick_steps": ["Step 1...", "Step 2..."]
     }
   ]
 }`;
@@ -119,7 +139,7 @@ Respond ONLY with valid JSON in this schema:
             format: "json",
             stream: false
           }),
-          signal: AbortSignal.timeout(20000)
+          signal: AbortSignal.timeout(25000)
         });
 
         if (genRes.ok) {
@@ -130,67 +150,89 @@ Respond ONLY with valid JSON in this schema:
           const jsonMatch = rawText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
-            if (parsed.recommendations && parsed.recommendations.length > 0) {
+            
+            // Format top recommendation
+            if (parsed.top_recommendation && parsed.top_recommendation.dish_name) {
+              const top = parsed.top_recommendation;
+              const builtImpact = buildGoalImpact(top, goalLabel, conditions, weightKg, targetCalories, targetProtein);
+              topRecommendation = {
+                ...top,
+                is_top_recommendation: true,
+                meal_type: mealType,
+                recommendation_reason: top.why_top_pick || `🏆 #1 Top Choice: Perfectly calibrated for your ${mealLabel} and ${goalLabel} goal.`,
+                goal_impact: {
+                  ...top.goal_impact,
+                  goal_name: goalLabel,
+                  how_it_helps: builtImpact.how_it_helps,
+                  helps_in_goal: top.goal_impact?.helps_in_goal || builtImpact.helps_in_goal,
+                  helps_in_conditions: top.goal_impact?.helps_in_conditions || builtImpact.helps_in_conditions,
+                  benefit_badges: top.goal_impact?.benefit_badges || builtImpact.benefit_badges,
+                  medical_notes: builtImpact.medical_notes
+                }
+              };
+            }
+
+            // Format other options
+            const others = (parsed.other_options || parsed.recommendations || []).map((dish: any) => {
+              const builtImpact = buildGoalImpact(dish, goalLabel, conditions, weightKg, targetCalories, targetProtein);
+              return {
+                ...dish,
+                is_top_recommendation: false,
+                meal_type: mealType,
+                goal_impact: {
+                  ...dish.goal_impact,
+                  goal_name: goalLabel,
+                  how_it_helps: builtImpact.how_it_helps,
+                  helps_in_goal: dish.goal_impact?.helps_in_goal || builtImpact.helps_in_goal,
+                  helps_in_conditions: dish.goal_impact?.helps_in_conditions || builtImpact.helps_in_conditions,
+                  benefit_badges: dish.goal_impact?.benefit_badges || builtImpact.benefit_badges,
+                  medical_notes: builtImpact.medical_notes
+                }
+              };
+            });
+
+            if (topRecommendation) {
+              allRecommendations = [topRecommendation, ...others];
               localLlmSuccess = true;
-              localLlmRecommendations = parsed.recommendations.map((rec: any) => {
-                const builtImpact = buildGoalImpact(rec, goalLabel, conditions, weightKg, targetCalories, targetProtein);
-                return {
-                  ...rec,
-                  goal_impact: {
-                    ...rec.goal_impact,
-                    goal_name: goalLabel,
-                    how_it_helps: rec.goal_impact?.how_it_helps || builtImpact.how_it_helps,
-                    helps_in_goal: rec.goal_impact?.helps_in_goal || builtImpact.helps_in_goal,
-                    helps_in_conditions: rec.goal_impact?.helps_in_conditions || builtImpact.helps_in_conditions,
-                    benefit_badges: rec.goal_impact?.benefit_badges || builtImpact.benefit_badges,
-                    medical_notes: rec.goal_impact?.medical_notes || builtImpact.medical_notes
-                  }
-                };
-              });
+            } else if (others.length > 0) {
+              others[0].is_top_recommendation = true;
+              topRecommendation = others[0];
+              allRecommendations = others;
+              localLlmSuccess = true;
             }
           }
         }
       }
     } catch (llmErr) {
-      console.warn("Local Ollama inference failed, falling back to database matches:", llmErr);
+      console.warn("Local Ollama on-the-spot generation failed, using dynamic database engine:", llmErr);
     }
 
-    // Combine or select the best recommendations
-    let finalRecs: any[] = [];
-    let activeModelName = "qwen2.5vl:3b (Local Ollama)";
-
-    if (localLlmSuccess && localLlmRecommendations.length > 0) {
-      // Merge local LLM recommendations with top complementary dishes from database for even more options!
-      const existingNames = new Set(localLlmRecommendations.map(r => r.dish_name.toLowerCase()));
-      const extraDatabaseDishes = databaseMatches
-        .filter(d => !existingNames.has(d.dish_name.toLowerCase()))
-        .slice(0, 2)
-        .map(d => {
-          const impact = buildGoalImpact(d, goalLabel, conditions, weightKg, targetCalories, targetProtein);
-          return {
-            ...d,
-            goal_impact: impact
-          };
-        });
-
-      finalRecs = [...localLlmRecommendations, ...extraDatabaseDishes];
-    } else {
-      activeModelName = "NutriVision 50+ Recipe Database";
-      finalRecs = databaseMatches.map(d => {
-        const impact = buildGoalImpact(d, goalLabel, conditions, weightKg, targetCalories, targetProtein);
+    // Fallback if LLM was unavailable: Use our 70+ database matched specifically to the ingredients and meal type!
+    if (!localLlmSuccess || allRecommendations.length === 0) {
+      activeModelName = "NutriVision Dynamic Culinary Engine";
+      allRecommendations = databaseMatches.map((dish, idx) => {
+        const isTop = idx === 0;
+        const builtImpact = buildGoalImpact(dish, goalLabel, conditions, weightKg, targetCalories, targetProtein);
         return {
-          ...d,
-          goal_impact: impact
+          ...dish,
+          meal_type: mealType,
+          is_top_recommendation: isTop,
+          recommendation_reason: isTop ? `🏆 #1 Top Choice: Best matches your listed ingredients and ${goalLabel} targets.` : "",
+          goal_impact: builtImpact
         };
       });
+
+      topRecommendation = allRecommendations[0] || null;
     }
 
     return NextResponse.json({
       success: true,
-      provider: localLlmSuccess ? "local" : "database",
+      provider: localLlmSuccess ? "local" : "dynamic_engine",
       model: activeModelName,
-      summary: `Found ${finalRecs.length} personalized, authentic dishes matching your ingredients: "${inputString}".`,
-      recommendations: finalRecs
+      meal_type: mealType,
+      summary: `Generated ${allRecommendations.length} personalized ${mealLabel} dishes using your ingredients: "${inputString}".`,
+      top_recommendation: topRecommendation,
+      recommendations: allRecommendations
     });
 
   } catch (err: any) {

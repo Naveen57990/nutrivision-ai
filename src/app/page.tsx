@@ -14,7 +14,8 @@ import {
   Heart,
   Bot,
   User,
-  Settings
+  Settings,
+  BookOpen
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -32,6 +33,7 @@ import CuteWaterTracker from "@/components/CuteWaterTracker";
 import MedicalProfileModal, { UserMedicalProfile } from "@/components/MedicalProfileModal";
 import { AISettingsModal } from "@/components/AISettingsModal";
 import SmartFoodIntelligenceStudio from "@/components/SmartFoodIntelligenceStudio";
+import CuteHealthDiary from "@/components/CuteHealthDiary";
 import CuteFloatingCoachBuddy from "@/components/CuteFloatingCoachBuddy";
 import { ApiClient } from "@/lib/api";
 import { DISH_DATABASE } from "@/lib/recipe_database";
@@ -93,7 +95,7 @@ const INITIAL_PROFILE: UserMedicalProfile = {
 
 export default function NutriVisionWebApp() {
   const [activeTab, setActiveTab] = useState<
-    "food_intelligence" | "dashboard" | "water" | "database"
+    "food_intelligence" | "diary" | "dashboard" | "water" | "database"
   >("food_intelligence");
 
   // Medical Profile State
@@ -170,7 +172,8 @@ export default function NutriVisionWebApp() {
           <nav className="hidden md:flex items-center gap-1.5 bg-[#F7FAFC] p-1.5 rounded-2xl border border-[#E2ECEB]">
             {[
               { id: "food_intelligence", label: "AI Food Studio", icon: ChefHat },
-              { id: "dashboard", label: "Dashboard & Tracker", icon: LayoutDashboard },
+              { id: "diary", label: "Cute Diary", icon: BookOpen },
+              { id: "dashboard", label: "Daily Tracker", icon: LayoutDashboard },
               { id: "water", label: "Pure Water", icon: Droplet },
               { id: "database", label: "Food Database", icon: Search }
             ].map((tab) => {
@@ -180,7 +183,7 @@ export default function NutriVisionWebApp() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
                     isActive
                       ? "bg-white text-[#177E75] shadow-xs ring-1 ring-teal-500/10"
                       : "text-[#5A6D6B] hover:text-[#20312F] hover:bg-white/50"
@@ -232,7 +235,8 @@ export default function NutriVisionWebApp() {
         <div className="md:hidden flex items-center justify-around border-t border-[#EDF3F3] bg-white px-2 py-2">
           {[
             { id: "food_intelligence", label: "Studio", icon: ChefHat },
-            { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+            { id: "diary", label: "Diary", icon: BookOpen },
+            { id: "dashboard", label: "Tracker", icon: LayoutDashboard },
             { id: "water", label: "Water", icon: Droplet },
             { id: "database", label: "Foods", icon: Search }
           ].map((tab) => {
@@ -274,7 +278,21 @@ export default function NutriVisionWebApp() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 2: DASHBOARD & DAILY TRACKER                              */}
+        {/* TAB 2: CUTE FLIP-PAGE HEALTH DIARY                            */}
+        {/* ============================================================== */}
+        {activeTab === "diary" && (
+          <div className="space-y-6 animate-fade-in">
+            <CuteHealthDiary
+              userProfile={medicalProfile}
+              onOpenAIShop={() => {
+                setActiveTab("food_intelligence");
+              }}
+            />
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 3: DASHBOARD & DAILY TRACKER                              */}
         {/* ============================================================== */}
         {activeTab === "dashboard" && (
           <div className="space-y-8 animate-fade-in">

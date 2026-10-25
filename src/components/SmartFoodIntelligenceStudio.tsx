@@ -32,16 +32,19 @@ interface SmartFoodIntelligenceStudioProps {
   onOpenProfile: () => void;
   onOpenAISettings: () => void;
   onLogMeal: (meal: any) => void;
+  initialMealSlot?: "breakfast" | "lunch" | "dinner" | "snack";
 }
 
 export default function SmartFoodIntelligenceStudio({
   userProfile,
   onOpenProfile,
   onOpenAISettings,
-  onLogMeal
+  onLogMeal,
+  initialMealSlot = "breakfast"
 }: SmartFoodIntelligenceStudioProps) {
   const [inputMode, setInputMode] = useState<"text" | "upload" | "camera">("text");
-  const [textInput, setTextInput] = useState("Paneer, Spinach, Tomatoes, Whole wheat flour");
+  const [textInput, setTextInput] = useState("Eggs, Tomato, Onion, Bread");
+  const [mealSlot, setMealSlot] = useState<"breakfast" | "lunch" | "dinner" | "snack">(initialMealSlot);
   const [dietFilter, setDietFilter] = useState<"vegetarian" | "non_vegetarian">(
     userProfile.dietary_pattern === "non_vegetarian" ? "non_vegetarian" : "vegetarian"
   );
@@ -149,7 +152,8 @@ export default function SmartFoodIntelligenceStudio({
         rawInput: scannedTerms || textInput,
         dishName: textInput,
         userProfile: userProfile,
-        dietaryPreference: dietFilter
+        dietaryPreference: dietFilter,
+        mealType: mealSlot
       };
 
       const res = await fetch("/api/food-intelligence", {
@@ -266,6 +270,41 @@ export default function SmartFoodIntelligenceStudio({
             >
               📷 Live Camera
             </button>
+          </div>
+        </div>
+
+        {/* Step 1B: Targeted Meal Slot (Breakfast, Lunch, Dinner, Snack) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 shrink-0">
+              <span>🍽️</span> Target Meal Slot:
+            </span>
+            <span className="text-[11px] text-slate-500 hidden sm:inline">
+              (AI tailors portion and recipe for this meal)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { id: "breakfast", label: "Breakfast", icon: "🌅" },
+              { id: "lunch", label: "Lunch", icon: "☀️" },
+              { id: "dinner", label: "Dinner", icon: "🌙" },
+              { id: "snack", label: "Snack & Tea", icon: "🍵" }
+            ].map((slot) => (
+              <button
+                key={slot.id}
+                type="button"
+                onClick={() => setMealSlot(slot.id as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 border ${
+                  mealSlot === slot.id
+                    ? "bg-teal-700 text-white border-teal-700 shadow-sm"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <span>{slot.icon}</span>
+                <span>{slot.label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -468,95 +507,115 @@ export default function SmartFoodIntelligenceStudio({
       </div>
 
       {/* Results Section: The 3 Answers */}
-      {results && results.length > 0 && (
-        <div className="space-y-6 animate-in fade-in">
-          
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold text-slate-900">
-                Personalized Meal Recommendations
-              </h3>
-              <p className="text-xs text-slate-500">{resultsSummary}</p>
-            </div>
-            <span className="text-xs px-3 py-1 rounded-full bg-teal-100 text-teal-800 font-bold flex items-center gap-1.5">
-              <Bot className="w-3.5 h-3.5" /> Engine: {activeProvider}
-            </span>
-          </div>
+      {results && results.length > 0 && (() => {
+        const topRec = results.find(r => r.is_top_recommendation) || results[0];
+        const otherRecs = results.filter(r => r !== topRec);
 
-          <div className="grid grid-cols-1 gap-6">
-            {results.map((rec, idx) => (
-              <div 
-                key={idx}
-                className="bg-white rounded-3xl border border-teal-200/80 shadow-md overflow-hidden hover:shadow-xl transition-all"
-              >
-                {/* Recipe Card Header */}
-                <div className="p-6 bg-gradient-to-r from-teal-50/80 via-emerald-50/50 to-white border-b border-teal-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-xl font-extrabold text-slate-900">
-                        {rec.dish_name}
+        return (
+          <div className="space-y-8 animate-in fade-in">
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <span>AI Food Intelligence for {mealSlot.toUpperCase()}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">{resultsSummary}</p>
+              </div>
+              <span className="text-xs px-3.5 py-1.5 rounded-full bg-teal-100 text-teal-800 font-extrabold flex items-center gap-1.5 self-start sm:self-auto shadow-2xs">
+                <Bot className="w-3.5 h-3.5" /> Engine: {activeProvider}
+              </span>
+            </div>
+
+            {/* ============================================================== */}
+            {/* HERO SPOTLIGHT: #1 TOP RECOMMENDATION FOR THE USER             */}
+            {/* ============================================================== */}
+            {topRec && (
+              <div className="p-6 rounded-3xl bg-gradient-to-br from-amber-50/70 via-white to-emerald-50/50 border-3 border-teal-500 shadow-xl space-y-5">
+                
+                {/* Hero Header */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-teal-100">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black px-3 py-1 rounded-full bg-amber-400 text-amber-950 uppercase tracking-wider shadow-xs flex items-center gap-1">
+                        🏆 #1 TOP RECOMMENDATION
+                      </span>
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-teal-100 text-teal-900 capitalize">
+                        Target: {mealSlot}
                       </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        rec.is_vegetarian 
+                        topRec.is_vegetarian 
                           ? "bg-emerald-100 text-emerald-800 border border-emerald-200" 
                           : "bg-rose-100 text-rose-800 border border-rose-200"
                       }`}>
-                        {rec.is_vegetarian ? "🥬 Vegetarian" : "🍗 Non-Vegetarian"}
+                        {topRec.is_vegetarian ? "🥬 Vegetarian" : "🍗 Non-Vegetarian"}
                       </span>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-500" /> {rec.prep_time_minutes} mins
+                        <Clock className="w-3 h-3 text-slate-500" /> {topRec.prep_time_minutes} mins
                       </span>
                     </div>
 
+                    <h4 className="text-2xl font-black text-slate-900 tracking-tight">
+                      {topRec.dish_name}
+                    </h4>
+
                     <div className="text-xs text-slate-600 flex items-center gap-2 flex-wrap">
-                      <span><strong>Ingredients used:</strong> {rec.ingredients_used?.join(", ")}</span>
-                      {rec.missing_ingredients?.length > 0 && (
+                      <span><strong>Ingredients used:</strong> {topRec.ingredients_used?.join(", ")}</span>
+                      {topRec.missing_ingredients?.length > 0 && (
                         <span className="text-amber-700">
-                          (Need: {rec.missing_ingredients.join(", ")})
+                          (Need: {topRec.missing_ingredients.join(", ")})
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Log Button */}
+                  {/* Primary Hero Log Button */}
                   <button
                     type="button"
                     onClick={() => {
                       onLogMeal({
-                        meal_type: "lunch",
+                        meal_type: mealSlot,
                         items: [{
-                          food_name: rec.dish_name,
+                          food_name: topRec.dish_name,
                           weight_grams: 250,
-                          calories: rec.nutrition.calories,
-                          protein: rec.nutrition.protein_g,
-                          carbs: rec.nutrition.carbs_g,
-                          fiber: rec.nutrition.fiber_g
+                          calories: topRec.nutrition.calories,
+                          protein: topRec.nutrition.protein_g,
+                          carbs: topRec.nutrition.carbs_g,
+                          fiber: topRec.nutrition.fiber_g
                         }],
-                        total_calories: rec.nutrition.calories,
-                        total_protein: rec.nutrition.protein_g,
-                        total_carbs: rec.nutrition.carbs_g,
-                        total_fiber: rec.nutrition.fiber_g
+                        total_calories: topRec.nutrition.calories,
+                        total_protein: topRec.nutrition.protein_g,
+                        total_carbs: topRec.nutrition.carbs_g,
+                        total_fiber: topRec.nutrition.fiber_g
                       });
-                      alert(`Logged "${rec.dish_name}" to your Daily Meals Tracker!`);
+                      alert(`Logged "#1 Top Pick: ${topRec.dish_name}" to your ${mealSlot.toUpperCase()} Diary!`);
                     }}
-                    className="px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 self-start md:self-auto"
+                    className="px-5 py-3 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black transition-all shadow-md hover:shadow-lg flex items-center gap-2 shrink-0 self-start md:self-auto"
                   >
-                    <Plus className="w-4 h-4" /> Log to Today&apos;s Diary
+                    <Plus className="w-4 h-4" /> Log This Top Pick to Diary
                   </button>
                 </div>
 
-                {/* The 3 Core Pillars in 3 Columns */}
-                <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+                {/* Why This is #1 Callout */}
+                <div className="p-3.5 rounded-2xl bg-amber-100/70 border border-amber-300 text-xs text-amber-950 flex items-start gap-2.5 shadow-2xs">
+                  <Sparkles className="w-4 h-4 text-amber-700 shrink-0 mt-0.5 animate-pulse" />
+                  <div>
+                    <strong>Why AI Selected This As Your #1 Match:</strong>{" "}
+                    {topRec.recommendation_reason || `Directly uses your listed ingredients and delivers ${topRec.nutrition?.protein_g}g protein tailored for your ${userProfile.primary_goal.replace(/_/g, " ")} goal.`}
+                  </div>
+                </div>
+
+                {/* 3 Core Pillars for Top Rec */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 divide-y lg:divide-y-0 lg:divide-x divide-teal-100 pt-2">
                   
-                  {/* Pillar 1: What can you make & Quick Steps */}
+                  {/* Pillar 1 */}
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-teal-800 font-bold text-sm">
                       <ChefHat className="w-4 h-4 text-teal-600" />
                       <h4>1. Preparation Guide</h4>
                     </div>
                     <div className="space-y-2">
-                      {(rec.quick_steps || []).map((step: string, sIdx: number) => (
-                        <div key={sIdx} className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed">
+                      {(topRec.quick_steps || []).map((step: string, sIdx: number) => (
+                        <div key={sIdx} className="flex items-start gap-2 text-xs text-slate-700 leading-relaxed">
                           <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
                             {sIdx + 1}
                           </span>
@@ -566,134 +625,63 @@ export default function SmartFoodIntelligenceStudio({
                     </div>
                   </div>
 
-                  {/* Pillar 2: How much should you eat? (Personalized Portion) */}
+                  {/* Pillar 2 */}
                   <div className="pt-4 lg:pt-0 lg:px-4 space-y-3">
                     <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
                       <Scale className="w-4 h-4 text-blue-600" />
                       <h4>2. How Much Should You Eat?</h4>
                     </div>
-
                     <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-2">
                       <div className="text-xs font-extrabold text-blue-950 font-mono">
-                        Serving Size: {rec.portion_guidance?.serving_size}
+                        Serving Size: {topRec.portion_guidance?.serving_size}
                       </div>
                       <p className="text-xs text-blue-900 leading-relaxed">
-                        {rec.portion_guidance?.reasoning}
+                        {topRec.portion_guidance?.reasoning}
                       </p>
-                    </div>
-
-                    <div className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                      💡 <strong>ICMR Portion Rule:</strong> Keep added cooking oil under 1-2 tsp to preserve cardiac health.
                     </div>
                   </div>
 
-                  {/* Pillar 3: What you will get & How it achieves your goal */}
+                  {/* Pillar 3 */}
                   <div className="pt-4 lg:pt-0 lg:pl-4 space-y-3">
                     <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
                       <Target className="w-4 h-4 text-emerald-600" />
                       <h4>3. What You Get & Goal Impact</h4>
                     </div>
 
-                    {/* Macro Breakdown Chips */}
                     <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
                         <div className="text-[10px] text-slate-400 font-bold">CALORIES</div>
                         <div className="text-sm font-extrabold text-teal-800 font-mono">
-                          {rec.nutrition?.calories}
+                          {topRec.nutrition?.calories}
                         </div>
                       </div>
-                      <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
                         <div className="text-[10px] text-slate-400 font-bold">PROTEIN</div>
                         <div className="text-sm font-extrabold text-blue-800 font-mono">
-                          {rec.nutrition?.protein_g}g
+                          {topRec.nutrition?.protein_g}g
                         </div>
                       </div>
-                      <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
                         <div className="text-[10px] text-slate-400 font-bold">FIBER</div>
                         <div className="text-sm font-extrabold text-emerald-800 font-mono">
-                          {rec.nutrition?.fiber_g}g
+                          {topRec.nutrition?.fiber_g}g
                         </div>
                       </div>
                     </div>
 
-                    {/* Explicit "HOW THIS WILL HELP YOU" Card */}
-                    <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50/70 to-sky-50/50 border border-emerald-200/90 shadow-xs space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-black text-emerald-950">
-                          <Sparkles className="w-4 h-4 text-emerald-600 animate-pulse" />
-                          <span>🌟 THIS WILL HELP YOU IN:</span>
-                        </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/60 text-emerald-900 border border-emerald-300/60">
-                          Goal & Clinical Alignment
-                        </span>
+                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 space-y-2">
+                      <div className="flex items-center gap-1.5 text-xs font-black text-emerald-950">
+                        <Sparkles className="w-4 h-4 text-emerald-600" />
+                        <span>🌟 THIS WILL HELP YOU IN:</span>
                       </div>
-
-                      {/* Structured breakdown */}
-                      <div className="space-y-2 text-xs leading-relaxed">
-                        {rec.goal_impact?.helps_in_goal ? (
-                          <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-100/80 space-y-1 shadow-xs">
-                            <div className="text-[11px] font-extrabold text-teal-950 flex items-center gap-1.5">
-                              <span>🎯</span>
-                              <span>In Your <strong>{userProfile.primary_goal?.replace(/_/g, " ").toUpperCase()}</strong> Goal:</span>
-                            </div>
-                            <p className="text-slate-700 text-xs leading-relaxed">
-                              {rec.goal_impact.helps_in_goal.replace(/\*\*/g, "")}
-                            </p>
-                          </div>
-                        ) : null}
-
-                        {rec.goal_impact?.helps_in_conditions ? (
-                          <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-100/80 space-y-1 shadow-xs">
-                            <div className="text-[11px] font-extrabold text-teal-950 flex items-center gap-1.5">
-                              <span>🩺</span>
-                              <span>In Your Health Records & Guardrails:</span>
-                            </div>
-                            <p className="text-slate-700 text-xs leading-relaxed">
-                              {rec.goal_impact.helps_in_conditions.replace(/\*\*/g, "")}
-                            </p>
-                          </div>
-                        ) : null}
-
-                        {!rec.goal_impact?.helps_in_goal && !rec.goal_impact?.helps_in_conditions && (
-                          <p className="text-slate-800 text-xs leading-relaxed font-medium">
-                            {rec.goal_impact?.how_it_helps || rec.goal_impact?.summary}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Badges / Quick Highlights */}
-                      {rec.goal_impact?.benefit_badges && rec.goal_impact.benefit_badges.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {rec.goal_impact.benefit_badges.map((badge: string, bIdx: number) => (
-                            <span key={bIdx} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100/80 text-teal-900 border border-teal-200">
-                              {badge}
-                            </span>
-                          ))}
-                        </div>
+                      <p className="text-xs text-slate-800 leading-relaxed">
+                        {topRec.goal_impact?.helps_in_goal?.replace(/\*\*/g, "") || topRec.goal_impact?.how_it_helps}
+                      </p>
+                      {topRec.goal_impact?.helps_in_conditions && (
+                        <p className="text-xs text-teal-900 pt-1 border-t border-emerald-200/60 leading-relaxed">
+                          {topRec.goal_impact.helps_in_conditions.replace(/\*\*/g, "")}
+                        </p>
                       )}
-
-                      {rec.goal_impact?.medical_notes && (
-                        <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-teal-900 flex items-start gap-1.5">
-                          <Heart className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
-                          <span><strong>Clinical Guard:</strong> {rec.goal_impact.medical_notes}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Quick Clinical Health Badges */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                        💪 +{rec.nutrition?.protein_g}g Protein
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                        🌾 +{rec.nutrition?.fiber_g}g Fiber
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800">
-                        🩸 Low Glycemic Index
-                      </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
-                        🧂 {rec.nutrition?.sodium_mg}mg Sodium
-                      </span>
                     </div>
 
                   </div>
@@ -701,11 +689,117 @@ export default function SmartFoodIntelligenceStudio({
                 </div>
 
               </div>
-            ))}
-          </div>
+            )}
 
-        </div>
-      )}
+            {/* ============================================================== */}
+            {/* MORE OPTIONS: 4 TO 6+ DIVERSE DISHES                           */}
+            {/* ============================================================== */}
+            {otherRecs.length > 0 && (
+              <div className="space-y-4 pt-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span>🍽️ More Dishes You Can Make</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                      {otherRecs.length} Options
+                    </span>
+                  </h4>
+                  <span className="text-xs text-slate-500">
+                    All strictly using your listed ingredients
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {otherRecs.map((rec, oIdx) => (
+                    <div
+                      key={oIdx}
+                      className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            rec.is_vegetarian 
+                              ? "bg-emerald-100 text-emerald-800" 
+                              : "bg-rose-100 text-rose-800"
+                          }`}>
+                            {rec.is_vegetarian ? "🥬 Vegetarian" : "🍗 Non-Veg"}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" /> {rec.prep_time_minutes} min
+                          </span>
+                        </div>
+
+                        <div>
+                          <h5 className="font-extrabold text-base text-slate-900">{rec.dish_name}</h5>
+                          <div className="text-[11px] text-slate-500 mt-1">
+                            <strong>Uses:</strong> {rec.ingredients_used?.join(", ")}
+                          </div>
+                        </div>
+
+                        {/* Macro Chips */}
+                        <div className="grid grid-cols-3 gap-1.5 p-2 rounded-2xl bg-slate-50 text-center text-[10px]">
+                          <div>
+                            <span className="text-slate-400 block font-bold">KCAL</span>
+                            <strong className="text-teal-900 font-mono text-xs">{rec.nutrition?.calories}</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block font-bold">PROTEIN</span>
+                            <strong className="text-blue-700 font-mono text-xs">{rec.nutrition?.protein_g}g</strong>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block font-bold">FIBER</span>
+                            <strong className="text-emerald-700 font-mono text-xs">{rec.nutrition?.fiber_g}g</strong>
+                          </div>
+                        </div>
+
+                        {/* Serving guidance */}
+                        <div className="text-[11px] text-slate-600 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
+                          <strong>Portion:</strong> {rec.portion_guidance?.serving_size} • {rec.portion_guidance?.reasoning}
+                        </div>
+
+                        {/* How it helps */}
+                        <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-[11px] text-emerald-950 space-y-1">
+                          <span className="font-bold text-[10px] uppercase text-emerald-900 block">
+                            💡 THIS WILL HELP YOU IN:
+                          </span>
+                          <p className="text-slate-700 leading-relaxed text-[11px]">
+                            {rec.goal_impact?.helps_in_goal?.replace(/\*\*/g, "") || rec.goal_impact?.how_it_helps}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onLogMeal({
+                            meal_type: mealSlot,
+                            items: [{
+                              food_name: rec.dish_name,
+                              weight_grams: 220,
+                              calories: rec.nutrition.calories,
+                              protein: rec.nutrition.protein_g,
+                              carbs: rec.nutrition.carbs_g,
+                              fiber: rec.nutrition.fiber_g
+                            }],
+                            total_calories: rec.nutrition.calories,
+                            total_protein: rec.nutrition.protein_g,
+                            total_carbs: rec.nutrition.carbs_g,
+                            total_fiber: rec.nutrition.fiber_g
+                          });
+                          alert(`Logged "${rec.dish_name}" to your ${mealSlot.toUpperCase()} Diary!`);
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-[#E9F8F3] hover:bg-[#d4f2e5] text-[#177E75] font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Log to {mealSlot.toUpperCase()} Diary
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        );
+      })()}
 
     </div>
   );
