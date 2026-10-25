@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
 
         if (connected) {
           const hasVisionModel = detectedModels.some(m => 
-            m.includes("vision") || m.includes("llava") || m.includes("moondream")
+            m.includes("vision") || m.includes("vl") || m.includes("llava") || m.includes("moondream")
           );
 
           return NextResponse.json({

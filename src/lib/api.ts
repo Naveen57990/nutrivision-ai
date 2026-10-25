@@ -41,11 +41,11 @@ export class ApiClient {
       } catch {}
     }
     return {
-      provider: "auto",
+      provider: "local",
       openaiModel: "gpt-4o",
       geminiModel: "gemini-1.5-flash",
       localLlmUrl: "http://localhost:11434",
-      localLlmModel: "llama3.2-vision",
+      localLlmModel: "qwen2.5vl:3b",
     };
   }
 
