@@ -34,6 +34,7 @@ import { AISettingsModal } from "@/components/AISettingsModal";
 import SmartFoodIntelligenceStudio from "@/components/SmartFoodIntelligenceStudio";
 import CuteFloatingCoachBuddy from "@/components/CuteFloatingCoachBuddy";
 import { ApiClient } from "@/lib/api";
+import { DISH_DATABASE } from "@/lib/recipe_database";
 
 // Initial Logged Meals for Today
 const INITIAL_MEALS = [
@@ -106,6 +107,8 @@ export default function NutriVisionWebApp() {
 
   // Food Database Explorer State
   const [foods, setFoods] = useState<any[]>([]);
+  const [dishDatabase, setDishDatabase] = useState(DISH_DATABASE);
+  const [dbView, setDbView] = useState<"dishes" | "raw">("dishes");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Daily Totals Calculation
@@ -425,91 +428,242 @@ export default function NutriVisionWebApp() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 4: FOOD DATABASE EXPLORER                                 */}
+        {/* TAB 4: FOOD & DISHES DATABASE EXPLORER                        */}
         {/* ============================================================== */}
         {activeTab === "database" && (
           <div className="space-y-6 animate-fade-in">
-            <div>
-              <h2 className="text-xl font-bold text-[#20312F]">ICMR-NIN 2024 Indian Food Database</h2>
-              <p className="text-xs text-[#5A6D6B] mt-0.5">
-                Search verified Indian food records and calculate deterministic nutrients for customized weights.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-bold text-[#20312F]">ICMR-NIN 2024 Food & Dishes Database</h2>
+                <p className="text-xs text-[#5A6D6B] mt-0.5">
+                  Browse 50+ cooked dishes with authentic portion guidance and verified Indian whole food records.
+                </p>
+              </div>
+
+              {/* View Switcher: Cooked Dishes vs Raw Ingredients */}
+              <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-2xl self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setDbView("dishes")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    dbView === "dishes"
+                      ? "bg-white text-teal-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  🍲 Cooked Dishes (50+)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDbView("raw")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    dbView === "raw"
+                      ? "bg-white text-teal-900 shadow-sm"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  🌾 Raw Whole Foods
+                </button>
+              </div>
             </div>
 
+            {/* Search Bar */}
             <div className="bg-white p-4 rounded-2xl border border-[#E2ECEB] card-shadow flex gap-2">
               <Search className="w-4 h-4 text-[#8E9F9D] my-auto ml-2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search food by English, Hindi, or Tamil name (e.g. Roti, Idli, Dal, Curd, Paneer, Chicken)..."
+                placeholder={
+                  dbView === "dishes"
+                    ? "Search dishes (e.g. Palak Paneer, Egg Bhurji, Chilla, Khichdi, Chicken Tikka, Oats)..."
+                    : "Search whole food records (e.g. Roti, Rice, Curd, Paneer, Toor Dal, Apple)..."
+                }
                 className="w-full px-2 py-1 text-xs focus:outline-none"
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {foods
-                .filter((f) => !searchQuery || f.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((f) => (
-                  <div key={f.id} className="p-4 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
-                    <div className="flex items-center gap-3">
-                      <FoodImage foodName={f.name} category={f.category} className="w-12 h-12 rounded-xl shrink-0" aspectRatio="square" />
-                      <div className="min-w-0 flex-1">
-                        <span className="text-[9px] uppercase font-bold text-[#177E75] bg-[#E9F8F3] px-2 py-0.5 rounded-md">
-                          {f.category}
-                        </span>
-                        <h4 className="font-bold text-xs text-[#20312F] truncate mt-1">{f.name}</h4>
-                        <span className="text-[10px] text-[#8E9F9D] block">{f.default_serving_name}</span>
-                      </div>
-                    </div>
+            {/* Cooked Dishes View */}
+            {dbView === "dishes" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {dishDatabase
+                  .filter((d) => 
+                    !searchQuery ||
+                    d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    d.essential_ingredients.some((i: string) => i.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                    d.regional_cuisine.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  .map((dish) => (
+                    <div key={dish.id} className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-4 hover:shadow-lg transition-all flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            dish.is_vegetarian 
+                              ? "bg-emerald-100 text-emerald-800" 
+                              : "bg-rose-100 text-rose-800"
+                          }`}>
+                            {dish.is_vegetarian ? "🥬 Vegetarian" : "🍗 Non-Veg"}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            {dish.regional_cuisine} • {dish.prep_time_minutes} min
+                          </span>
+                        </div>
 
-                    <div className="grid grid-cols-4 gap-1 bg-[#F7FAFC] p-2 rounded-xl text-center text-[10px]">
-                      <div>
-                        <span className="text-[#8E9F9D] block">Kcal</span>
-                        <strong>{Math.round(f.calories_per_100g)}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[#8E9F9D] block">Protein</span>
-                        <strong className="text-[#177E75]">{f.protein_per_100g}g</strong>
-                      </div>
-                      <div>
-                        <span className="text-[#8E9F9D] block">Carbs</span>
-                        <strong>{f.carbs_per_100g}g</strong>
-                      </div>
-                      <div>
-                        <span className="text-[#8E9F9D] block">Fiber</span>
-                        <strong className="text-[#218C68]">{f.fiber_per_100g}g</strong>
-                      </div>
-                    </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-[#20312F]">{dish.name}</h4>
+                          <p className="text-[11px] text-[#5A6D6B] line-clamp-2 mt-1">{dish.description}</p>
+                        </div>
 
-                    <button
-                      onClick={() => {
-                        setMeals([...meals, {
-                          id: Date.now(),
-                          meal_type: "snack",
-                          items: [{ 
-                            food_name: f.name, 
-                            weight_grams: f.default_serving_grams, 
-                            calories: f.calories_per_100g * (f.default_serving_grams / 100), 
-                            protein: f.protein_per_100g * (f.default_serving_grams / 100), 
-                            carbs: f.carbs_per_100g * (f.default_serving_grams / 100), 
-                            fiber: f.fiber_per_100g * (f.default_serving_grams / 100) 
-                          }],
-                          total_calories: Number((f.calories_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
-                          total_protein: Number((f.protein_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
-                          total_carbs: Number((f.carbs_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
-                          total_fiber: Number((f.fiber_per_100g * (f.default_serving_grams / 100)).toFixed(1))
-                        }]);
-                        alert(`Added "${f.name}" to today's diary!`);
-                        setActiveTab("dashboard");
-                      }}
-                      className="w-full py-2 rounded-xl bg-[#E9F8F3] text-[#177E75] font-bold text-xs hover:bg-[#d5f3e7] transition-colors"
-                    >
-                      + Quick Log Standard Serving
-                    </button>
-                  </div>
-                ))}
-            </div>
+                        {/* Macro Chips */}
+                        <div className="grid grid-cols-4 gap-1 bg-[#F7FAFC] p-2 rounded-2xl text-center text-[10px]">
+                          <div>
+                            <span className="text-[#8E9F9D] block">Kcal</span>
+                            <strong className="text-teal-900 font-mono">{dish.calories}</strong>
+                          </div>
+                          <div>
+                            <span className="text-[#8E9F9D] block">Protein</span>
+                            <strong className="text-blue-700 font-mono">{dish.protein_g}g</strong>
+                          </div>
+                          <div>
+                            <span className="text-[#8E9F9D] block">Carbs</span>
+                            <strong className="text-amber-700 font-mono">{dish.carbs_g}g</strong>
+                          </div>
+                          <div>
+                            <span className="text-[#8E9F9D] block">Fiber</span>
+                            <strong className="text-emerald-700 font-mono">{dish.fiber_g}g</strong>
+                          </div>
+                        </div>
+
+                        {/* Serving guidance */}
+                        <div className="text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <strong>Standard Portion:</strong> {dish.default_serving_size}
+                        </div>
+
+                        {/* "How this helps you" pill */}
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-50/80 via-teal-50/60 to-white border border-emerald-200/70 text-[11px] text-emerald-950 space-y-1.5 shadow-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-[10px] uppercase text-emerald-900 tracking-wider flex items-center gap-1">
+                              <span>💡</span> THIS WILL HELP YOU IN:
+                            </span>
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              {medicalProfile.primary_goal.replace(/_/g, " ")}
+                            </span>
+                          </div>
+                          
+                          <p className="text-slate-700 leading-relaxed text-[11px]">
+                            {medicalProfile.primary_goal.includes("muscle") ? (
+                              <span>Delivers <strong>{dish.protein_g}g protein</strong> ({Math.round((dish.protein_g / medicalProfile.daily_protein_target_g) * 100)}% of your daily {medicalProfile.daily_protein_target_g}g target) to support muscle repair and hypertrophy.</span>
+                            ) : medicalProfile.primary_goal.includes("loss") || medicalProfile.primary_goal.includes("fat") ? (
+                              <span>Controlled at <strong>{dish.calories} kcal</strong> with <strong>{dish.fiber_g}g fiber</strong> to promote satiety and fat loss without hunger pangs.</span>
+                            ) : (
+                              <span>Balanced ICMR nutrition with <strong>{dish.protein_g}g protein</strong> and <strong>{dish.fiber_g}g fiber</strong> for sustained vitality.</span>
+                            )}
+                          </p>
+
+                          {medicalProfile.health_conditions.some((c: string) => c.includes("diabetes") || c.includes("prediabetes")) && (
+                            <div className="pt-1 border-t border-emerald-200/50 text-[10px] text-teal-900 flex items-center gap-1">
+                              <span>🩸</span> <span>Low-glycemic profile protects post-meal glucose stability.</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setMeals([...meals, {
+                            id: Date.now(),
+                            meal_type: dish.meal_types[0] || "lunch",
+                            items: [{
+                              food_name: dish.name,
+                              weight_grams: dish.default_serving_grams,
+                              calories: dish.calories,
+                              protein: dish.protein_g,
+                              carbs: dish.carbs_g,
+                              fiber: dish.fiber_g
+                            }],
+                            total_calories: dish.calories,
+                            total_protein: dish.protein_g,
+                            total_carbs: dish.carbs_g,
+                            total_fiber: dish.fiber_g
+                          }]);
+                          alert(`Added "${dish.name}" to today's diary!`);
+                          setActiveTab("dashboard");
+                        }}
+                        className="w-full mt-3 py-2.5 rounded-xl bg-[#E9F8F3] hover:bg-[#d5f3e7] text-[#177E75] font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Log This Dish
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* Raw Whole Foods View */}
+            {dbView === "raw" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {foods
+                  .filter((f) => !searchQuery || f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((f) => (
+                    <div key={f.id} className="p-4 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
+                      <div className="flex items-center gap-3">
+                        <FoodImage foodName={f.name} category={f.category} className="w-12 h-12 rounded-xl shrink-0" aspectRatio="square" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[9px] uppercase font-bold text-[#177E75] bg-[#E9F8F3] px-2 py-0.5 rounded-md">
+                            {f.category}
+                          </span>
+                          <h4 className="font-bold text-xs text-[#20312F] truncate mt-1">{f.name}</h4>
+                          <span className="text-[10px] text-[#8E9F9D] block">{f.default_serving_name}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1 bg-[#F7FAFC] p-2 rounded-xl text-center text-[10px]">
+                        <div>
+                          <span className="text-[#8E9F9D] block">Kcal</span>
+                          <strong>{Math.round(f.calories_per_100g)}</strong>
+                        </div>
+                        <div>
+                          <span className="text-[#8E9F9D] block">Protein</span>
+                          <strong className="text-[#177E75]">{f.protein_per_100g}g</strong>
+                        </div>
+                        <div>
+                          <span className="text-[#8E9F9D] block">Carbs</span>
+                          <strong>{f.carbs_per_100g}g</strong>
+                        </div>
+                        <div>
+                          <span className="text-[#8E9F9D] block">Fiber</span>
+                          <strong className="text-[#218C68]">{f.fiber_per_100g}g</strong>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setMeals([...meals, {
+                            id: Date.now(),
+                            meal_type: "snack",
+                            items: [{ 
+                              food_name: f.name, 
+                              weight_grams: f.default_serving_grams, 
+                              calories: f.calories_per_100g * (f.default_serving_grams / 100), 
+                              protein: f.protein_per_100g * (f.default_serving_grams / 100), 
+                              carbs: f.carbs_per_100g * (f.default_serving_grams / 100), 
+                              fiber: f.fiber_per_100g * (f.default_serving_grams / 100) 
+                            }],
+                            total_calories: Number((f.calories_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
+                            total_protein: Number((f.protein_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
+                            total_carbs: Number((f.carbs_per_100g * (f.default_serving_grams / 100)).toFixed(1)),
+                            total_fiber: Number((f.fiber_per_100g * (f.default_serving_grams / 100)).toFixed(1))
+                          }]);
+                          alert(`Added "${f.name}" to today's diary!`);
+                          setActiveTab("dashboard");
+                        }}
+                        className="w-full py-2 rounded-xl bg-[#E9F8F3] text-[#177E75] font-bold text-xs hover:bg-[#d5f3e7] transition-colors"
+                      >
+                        + Quick Log Standard Serving
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 

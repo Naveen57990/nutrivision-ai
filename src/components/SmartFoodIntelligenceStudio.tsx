@@ -616,24 +616,85 @@ export default function SmartFoodIntelligenceStudio({
                       </div>
                     </div>
 
-                    {/* Goal Achievement Explanation */}
-                    <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-1.5">
-                      <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        Achieving: {rec.goal_impact?.goal_name}
+                    {/* Explicit "HOW THIS WILL HELP YOU" Card */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 via-teal-50/70 to-sky-50/50 border border-emerald-200/90 shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-black text-emerald-950">
+                          <Sparkles className="w-4 h-4 text-emerald-600 animate-pulse" />
+                          <span>🌟 THIS WILL HELP YOU IN:</span>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/60 text-emerald-900 border border-emerald-300/60">
+                          Goal & Clinical Alignment
+                        </span>
                       </div>
-                      <p className="text-xs text-emerald-900 leading-relaxed">
-                        {rec.goal_impact?.summary}
-                      </p>
+
+                      {/* Structured breakdown */}
+                      <div className="space-y-2 text-xs leading-relaxed">
+                        {rec.goal_impact?.helps_in_goal ? (
+                          <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-100/80 space-y-1 shadow-xs">
+                            <div className="text-[11px] font-extrabold text-teal-950 flex items-center gap-1.5">
+                              <span>🎯</span>
+                              <span>In Your <strong>{userProfile.primary_goal?.replace(/_/g, " ").toUpperCase()}</strong> Goal:</span>
+                            </div>
+                            <p className="text-slate-700 text-xs leading-relaxed">
+                              {rec.goal_impact.helps_in_goal.replace(/\*\*/g, "")}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {rec.goal_impact?.helps_in_conditions ? (
+                          <div className="p-2.5 rounded-xl bg-white/80 border border-emerald-100/80 space-y-1 shadow-xs">
+                            <div className="text-[11px] font-extrabold text-teal-950 flex items-center gap-1.5">
+                              <span>🩺</span>
+                              <span>In Your Health Records & Guardrails:</span>
+                            </div>
+                            <p className="text-slate-700 text-xs leading-relaxed">
+                              {rec.goal_impact.helps_in_conditions.replace(/\*\*/g, "")}
+                            </p>
+                          </div>
+                        ) : null}
+
+                        {!rec.goal_impact?.helps_in_goal && !rec.goal_impact?.helps_in_conditions && (
+                          <p className="text-slate-800 text-xs leading-relaxed font-medium">
+                            {rec.goal_impact?.how_it_helps || rec.goal_impact?.summary}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Badges / Quick Highlights */}
+                      {rec.goal_impact?.benefit_badges && rec.goal_impact.benefit_badges.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {rec.goal_impact.benefit_badges.map((badge: string, bIdx: number) => (
+                            <span key={bIdx} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100/80 text-teal-900 border border-teal-200">
+                              {badge}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {rec.goal_impact?.medical_notes && (
+                        <div className="pt-2 border-t border-emerald-200/60 text-[11px] text-teal-900 flex items-start gap-1.5">
+                          <Heart className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                          <span><strong>Clinical Guard:</strong> {rec.goal_impact.medical_notes}</span>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Medical Condition Check */}
-                    {rec.goal_impact?.medical_notes && (
-                      <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] text-amber-950 flex items-start gap-1.5">
-                        <Heart className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                        <span><strong>Clinical Safeguard:</strong> {rec.goal_impact.medical_notes}</span>
-                      </div>
-                    )}
+                    {/* Quick Clinical Health Badges */}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                        💪 +{rec.nutrition?.protein_g}g Protein
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                        🌾 +{rec.nutrition?.fiber_g}g Fiber
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-800">
+                        🩸 Low Glycemic Index
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
+                        🧂 {rec.nutrition?.sodium_mg}mg Sodium
+                      </span>
+                    </div>
 
                   </div>
 
