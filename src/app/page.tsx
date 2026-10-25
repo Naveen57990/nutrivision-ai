@@ -1,29 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import {
-  Camera,
   ChefHat,
-  Sparkles,
   LayoutDashboard,
-  Utensils,
   Search,
   Plus,
   Trash2,
   CheckCircle2,
-  AlertTriangle,
-  Flame,
-  Scale,
-  ShieldCheck,
-  Send,
-  Calendar,
-  X,
-  Play,
   Leaf,
-  ArrowRight,
-  TrendingUp,
-  RefreshCw,
   Droplet,
   Heart,
   Bot,
@@ -41,16 +27,13 @@ import {
   CartesianGrid
 } from "recharts";
 import FoodImage from "@/components/FoodImage";
-import SuitabilityBadge from "@/components/SuitabilityBadge";
 import MacroGauge from "@/components/MacroGauge";
 import CuteWaterTracker from "@/components/CuteWaterTracker";
 import MedicalProfileModal, { UserMedicalProfile } from "@/components/MedicalProfileModal";
 import { AISettingsModal } from "@/components/AISettingsModal";
 import SmartFoodIntelligenceStudio from "@/components/SmartFoodIntelligenceStudio";
+import CuteFloatingCoachBuddy from "@/components/CuteFloatingCoachBuddy";
 import { ApiClient } from "@/lib/api";
-
-// Initial Demo Kitchen Pantry
-const INITIAL_PANTRY = ["Rice", "Moong Dal", "Onions", "Tomatoes", "Eggs", "Potatoes"];
 
 // Initial Logged Meals for Today
 const INITIAL_MEALS = [
@@ -109,7 +92,7 @@ const INITIAL_PROFILE: UserMedicalProfile = {
 
 export default function NutriVisionWebApp() {
   const [activeTab, setActiveTab] = useState<
-    "food_intelligence" | "dashboard" | "scanner" | "water" | "pantry" | "coach" | "database"
+    "food_intelligence" | "dashboard" | "water" | "database"
   >("food_intelligence");
 
   // Medical Profile State
@@ -120,37 +103,6 @@ export default function NutriVisionWebApp() {
 
   // Daily Tracker State
   const [meals, setMeals] = useState<any[]>(INITIAL_MEALS);
-
-  // Available Food (Smart Pantry) State
-  const [pantry, setPantry] = useState<string[]>(INITIAL_PANTRY);
-  const [customPantryInput, setCustomPantryInput] = useState("");
-  const [pantryResults, setPantryResults] = useState<any>(null);
-  const [loadingPantry, setLoadingPantry] = useState(false);
-
-  // Scanner State
-  const [cameraActive, setCameraActive] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState("");
-  const [detectedCandidates, setDetectedCandidates] = useState<any[]>([]);
-  const [scanReport, setScanReport] = useState<any>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  // Assistant Coach State
-  const [messages, setMessages] = useState<any[]>([
-    {
-      role: "assistant",
-      content: "Namaste Aarav! I'm your NutriVision AI Coach. I'm connected to your logged meals today (608 kcal, 23.4g protein), your medical profile (prediabetes, blood pressure limits), and your kitchen ingredients.\n\nAsk me what to cook right now, how to hit your protein target, or how to balance your Indian dinner!",
-      suggested_followups: [
-        "What can I cook with what I have at home?",
-        "How much protein do I need for muscle building?",
-        "How to balance my plate for prediabetes?"
-      ]
-    }
-  ]);
-  const [inputMessage, setInputMessage] = useState("");
-  const [sendingMsg, setSendingMsg] = useState(false);
-  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Food Database Explorer State
   const [foods, setFoods] = useState<any[]>([]);
@@ -180,170 +132,14 @@ export default function NutriVisionWebApp() {
       }
     } catch {}
 
-    fetchPantryRecommendations(pantry);
     fetch("/api/foods")
       .then((r) => r.json())
       .then((data) => setFoods(data))
       .catch(() => {});
   }, []);
 
-  const fetchPantryRecommendations = async (items: string[]) => {
-    setLoadingPantry(true);
-    try {
-      const res = await fetch("/api/available-food", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ available_ingredients: items })
-      });
-      const data = await res.json();
-      setPantryResults(data);
-    } catch {
-      // Fallback
-    } finally {
-      setLoadingPantry(false);
-    }
-  };
-
-  const handleTogglePantryItem = (item: string) => {
-    let updated: string[];
-    if (pantry.includes(item)) {
-      updated = pantry.filter((x) => x !== item);
-    } else {
-      updated = [...pantry, item];
-    }
-    setPantry(updated);
-    fetchPantryRecommendations(updated);
-  };
-
-  const handleAddCustomPantry = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customPantryInput.trim()) return;
-    const updated = [...pantry, customPantryInput.trim()];
-    setPantry(updated);
-    setCustomPantryInput("");
-    fetchPantryRecommendations(updated);
-  };
-
-  // Camera Management
-  const handleStartCamera = async () => {
-    try {
-      setCameraActive(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch {
-      alert("Camera access denied or unavailable. You can upload an image or choose a demo plate below!");
-      setCameraActive(false);
-    }
-  };
-
-  const handleCapturePhoto = () => {
-    if (!videoRef.current) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = videoRef.current.videoWidth || 640;
-    canvas.height = videoRef.current.videoHeight || 480;
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg");
-      setCapturedImage(dataUrl);
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream?.getTracks().forEach((track) => track.stop());
-      setCameraActive(false);
-      triggerAnalysis(dataUrl);
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      const url = URL.createObjectURL(file);
-      setCapturedImage(url);
-      triggerAnalysis(url);
-    }
-  };
-
-  const triggerAnalysis = (imgSrc: string) => {
-    setScanning(true);
-    setScanProgress("Analyzing plate through AI Vision...");
-    setScanReport(null);
-
-    setTimeout(() => setScanProgress("Classifying dishes against ICMR-NIN 2024 database..."), 600);
-    setTimeout(() => {
-      setScanning(false);
-      const mockCandidates = [
-        { dish_name: "Whole Wheat Chapati / Phulka", suggested_weight_grams: 70, household_measure: "2 rotis (70g)", confidence: 0.95 },
-        { dish_name: "Moong Dal Tadka", suggested_weight_grams: 150, household_measure: "1 katori (150g)", confidence: 0.92 },
-        { dish_name: "Bhindi Masala (Okra Sabzi)", suggested_weight_grams: 100, household_measure: "1 katori (100g)", confidence: 0.88 },
-        { dish_name: "Steamed White Rice", suggested_weight_grams: 120, household_measure: "1 bowl (120g)", confidence: 0.94 }
-      ];
-      setDetectedCandidates(mockCandidates);
-      evaluateMealReport(mockCandidates);
-    }, 1300);
-  };
-
-  const evaluateMealReport = async (items: any[]) => {
-    try {
-      const payload = items.map((it) => ({
-        food_name: it.dish_name,
-        weight_grams: it.suggested_weight_grams
-      }));
-      const res = await fetch("/api/nutrition", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      setScanReport(data);
-    } catch {}
-  };
-
-  const handleLogScannedMeal = () => {
-    if (!scanReport) return;
-    const newMeal = {
-      id: Date.now(),
-      meal_type: "dinner",
-      items: scanReport.items,
-      total_calories: scanReport.nutrients.calories,
-      total_protein: scanReport.nutrients.protein,
-      total_carbs: scanReport.nutrients.carbs,
-      total_fiber: scanReport.nutrients.fiber
-    };
-    setMeals([...meals, newMeal]);
-    alert("Scanned meal successfully logged to Dinner!");
-    setActiveTab("dashboard");
-  };
-
-  // Assistant Chat
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim() || sendingMsg) return;
-    const userMsg = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setInputMessage("");
-    setSendingMsg(true);
-
-    try {
-      const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
-      });
-      const data = await res.json();
-      setMessages((prev) => [...prev, data]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "I'm having a brief connection issue. Please try again shortly." }
-      ]);
-    } finally {
-      setSendingMsg(false);
-      chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-[#F7FAFC] text-[#20312F] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F7FAFC] text-[#20312F] flex flex-col font-sans relative">
       
       {/* Top Application Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E2ECEB] shadow-xs">
@@ -368,15 +164,12 @@ export default function NutriVisionWebApp() {
           </div>
 
           {/* Mode Switcher Tabs (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-1 bg-[#F7FAFC] p-1.5 rounded-2xl border border-[#E2ECEB]">
+          <nav className="hidden md:flex items-center gap-1.5 bg-[#F7FAFC] p-1.5 rounded-2xl border border-[#E2ECEB]">
             {[
               { id: "food_intelligence", label: "AI Food Studio", icon: ChefHat },
               { id: "dashboard", label: "Dashboard & Tracker", icon: LayoutDashboard },
               { id: "water", label: "Pure Water", icon: Droplet },
-              { id: "scanner", label: "Plate Scanner", icon: Camera },
-              { id: "pantry", label: "Kitchen Shelf", icon: Utensils },
-              { id: "coach", label: "Clinical Coach", icon: Sparkles },
-              { id: "database", label: "Food DB", icon: Search }
+              { id: "database", label: "Food Database", icon: Search }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -384,13 +177,13 @@ export default function NutriVisionWebApp() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                     isActive
                       ? "bg-white text-[#177E75] shadow-xs ring-1 ring-teal-500/10"
                       : "text-[#5A6D6B] hover:text-[#20312F] hover:bg-white/50"
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? "text-[#42BFA5]" : "text-[#8E9F9D]"}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? "text-[#42BFA5]" : "text-[#8E9F9D]"}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -433,13 +226,11 @@ export default function NutriVisionWebApp() {
         </div>
 
         {/* Mobile Navigation Rail */}
-        <div className="lg:hidden flex items-center justify-around border-t border-[#EDF3F3] bg-white px-2 py-2 overflow-x-auto">
+        <div className="md:hidden flex items-center justify-around border-t border-[#EDF3F3] bg-white px-2 py-2">
           {[
             { id: "food_intelligence", label: "Studio", icon: ChefHat },
             { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
             { id: "water", label: "Water", icon: Droplet },
-            { id: "scanner", label: "Scan", icon: Camera },
-            { id: "coach", label: "Coach", icon: Sparkles },
             { id: "database", label: "Foods", icon: Search }
           ].map((tab) => {
             const Icon = tab.icon;
@@ -448,7 +239,7 @@ export default function NutriVisionWebApp() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`flex flex-col items-center py-1 px-2.5 rounded-xl text-[10px] font-bold ${
+                className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-bold ${
                   isActive ? "text-[#177E75] bg-[#E9F8F3]" : "text-[#8E9F9D]"
                 }`}
               >
@@ -464,7 +255,7 @@ export default function NutriVisionWebApp() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
 
         {/* ============================================================== */}
-        {/* TAB 0: FLAGSHIP AI FOOD INTELLIGENCE & RECIPE STUDIO          */}
+        {/* TAB 1: FLAGSHIP AI FOOD INTELLIGENCE & RECIPE STUDIO          */}
         {/* ============================================================== */}
         {activeTab === "food_intelligence" && (
           <div className="space-y-6 animate-fade-in">
@@ -480,7 +271,7 @@ export default function NutriVisionWebApp() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 1: DASHBOARD & DAILY TRACKER                              */}
+        {/* TAB 2: DASHBOARD & DAILY TRACKER                              */}
         {/* ============================================================== */}
         {activeTab === "dashboard" && (
           <div className="space-y-8 animate-fade-in">
@@ -622,7 +413,7 @@ export default function NutriVisionWebApp() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 2: PURE HYDRATION TRACKER (DEDICATED VIEW)                */}
+        {/* TAB 3: PURE HYDRATION TRACKER (DEDICATED VIEW)                */}
         {/* ============================================================== */}
         {activeTab === "water" && (
           <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
@@ -634,409 +425,7 @@ export default function NutriVisionWebApp() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 3: OPTICAL FOOD SCANNER                                   */}
-        {/* ============================================================== */}
-        {activeTab === "scanner" && (
-          <div className="space-y-8 animate-fade-in">
-            <div className="max-w-2xl">
-              <h2 className="text-xl font-bold text-[#20312F]">AI Multi-Dish Indian Plate Scanner</h2>
-              <p className="text-xs text-[#5A6D6B] mt-0.5">
-                Capture or upload an Indian thali or mixed plate. Our AI detects distinct components and portions.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column: Capture or Upload Box */}
-              <div className="lg:col-span-6 space-y-4">
-                <div className="bg-white rounded-3xl p-6 border border-[#E2ECEB] card-shadow space-y-4">
-                  
-                  {cameraActive ? (
-                    <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex flex-col items-center justify-center">
-                      <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                      <div className="absolute bottom-4 flex gap-3">
-                        <button
-                          onClick={handleCapturePhoto}
-                          className="px-6 py-2.5 rounded-full bg-[#42BFA5] text-white font-bold text-xs shadow-lg flex items-center gap-2"
-                        >
-                          <Camera className="w-4 h-4" /> Snap Photo
-                        </button>
-                        <button
-                          onClick={() => {
-                            const stream = videoRef.current?.srcObject as MediaStream;
-                            stream?.getTracks().forEach((t) => t.stop());
-                            setCameraActive(false);
-                          }}
-                          className="px-4 py-2.5 rounded-full bg-white/20 text-white font-bold text-xs"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : capturedImage ? (
-                    <div className="relative rounded-2xl overflow-hidden border border-[#E2ECEB] aspect-video flex items-center justify-center bg-black/5">
-                      <img src={capturedImage} alt="Captured meal" className="w-full h-full object-cover" />
-                      <button
-                        onClick={() => { setCapturedImage(null); setScanReport(null); setDetectedCandidates([]); }}
-                        className="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white text-xs hover:bg-black/80"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-[#BCE8DE] rounded-3xl p-8 text-center bg-[#F7FAFC] flex flex-col items-center justify-center gap-3">
-                      <div className="w-14 h-14 rounded-2xl bg-[#E9F8F3] text-[#177E75] flex items-center justify-center shadow-xs">
-                        <Camera className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-[#20312F]">Upload or Snap Plate</div>
-                        <p className="text-xs text-[#8E9F9D] mt-0.5">Clear top-down photo gives best portion accuracy</p>
-                      </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <button
-                          onClick={handleStartCamera}
-                          className="px-4 py-2 rounded-xl bg-[#177E75] text-white text-xs font-bold shadow-xs hover:bg-[#126861]"
-                        >
-                          Open Camera
-                        </button>
-                        <label className="px-4 py-2 rounded-xl bg-white border border-[#E2ECEB] text-[#20312F] text-xs font-bold cursor-pointer hover:bg-[#F7FAFC]">
-                          Browse File
-                          <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sample Plate Presets for Quick Testing */}
-                  <div>
-                    <span className="text-[11px] font-bold text-[#8E9F9D] uppercase tracking-wider block mb-2">
-                      Or Test with Sample Plates:
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => {
-                          const demo = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=600&auto=format&fit=crop&q=80";
-                          setCapturedImage(demo);
-                          triggerAnalysis(demo);
-                        }}
-                        className="p-2.5 rounded-xl border border-[#E2ECEB] hover:border-[#42BFA5] text-left text-xs transition-colors flex items-center gap-2 bg-[#F7FAFC]"
-                      >
-                        <span className="text-base">🍛</span>
-                        <div>
-                          <strong className="block text-[#20312F]">North Indian Thali</strong>
-                          <span className="text-[10px] text-[#8E9F9D]">Roti, Dal, Sabzi, Rice</span>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          const demo = "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=600&auto=format&fit=crop&q=80";
-                          setCapturedImage(demo);
-                          triggerAnalysis(demo);
-                        }}
-                        className="p-2.5 rounded-xl border border-[#E2ECEB] hover:border-[#42BFA5] text-left text-xs transition-colors flex items-center gap-2 bg-[#F7FAFC]"
-                      >
-                        <span className="text-base">🥞</span>
-                        <div>
-                          <strong className="block text-[#20312F]">South Indian Tiffin</strong>
-                          <span className="text-[10px] text-[#8E9F9D]">Idli, Sambar, Chutney</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-
-              {/* Right Column: Detection Candidates & Macro Report */}
-              <div className="lg:col-span-6 space-y-4">
-                {scanning && (
-                  <div className="p-8 rounded-3xl bg-white border border-[#E2ECEB] text-center space-y-3">
-                    <RefreshCw className="w-8 h-8 text-[#42BFA5] animate-spin mx-auto" />
-                    <div className="font-bold text-sm text-[#20312F]">{scanProgress}</div>
-                    <p className="text-xs text-[#8E9F9D]">Extracting volumetric depth and household measures...</p>
-                  </div>
-                )}
-
-                {scanReport && (
-                  <div className="bg-white rounded-3xl p-6 border border-[#BCE8DE] card-shadow space-y-5 animate-fade-in">
-                    <div className="flex items-center justify-between pb-3 border-b border-[#EDF3F3]">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-[#218C68] tracking-wider">
-                          Optical Plate Breakdown
-                        </span>
-                        <h3 className="font-bold text-base text-[#20312F]">
-                          {detectedCandidates.length} Items Detected
-                        </h3>
-                      </div>
-                      <SuitabilityBadge level={scanReport.suitability.level} score={scanReport.suitability.score} />
-                    </div>
-
-                    {/* Detected Items List */}
-                    <div className="space-y-2.5">
-                      {detectedCandidates.map((c, i) => (
-                        <div key={i} className="p-3 rounded-2xl bg-[#F7FAFC] border border-[#E2ECEB] flex items-center justify-between text-xs">
-                          <div>
-                            <strong className="text-[#20312F] block">{c.dish_name}</strong>
-                            <span className="text-[11px] text-[#8E9F9D]">{c.household_measure}</span>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-full bg-[#E9F8F3] text-[#177E75] font-mono font-bold text-[10px]">
-                            {Math.round(c.confidence * 100)}% match
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Scientific Nutrient Totals */}
-                    <div className="grid grid-cols-4 gap-2 bg-[#E9F8F3] p-3 rounded-2xl text-center text-xs">
-                      <div>
-                        <span className="text-[10px] text-[#5A6D6B] block">Calories</span>
-                        <strong className="text-sm text-[#177E75] font-mono">{scanReport.nutrients.calories}</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[#5A6D6B] block">Protein</span>
-                        <strong className="text-sm text-[#177E75] font-mono">{scanReport.nutrients.protein}g</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[#5A6D6B] block">Carbs</span>
-                        <strong className="text-sm text-[#177E75] font-mono">{scanReport.nutrients.carbs}g</strong>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[#5A6D6B] block">Fiber</span>
-                        <strong className="text-sm text-[#218C68] font-mono">{scanReport.nutrients.fiber}g</strong>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={handleLogScannedMeal}
-                      className="w-full py-3 rounded-2xl bg-[#177E75] hover:bg-[#126861] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" /> Confirm & Log Meal to Today
-                    </button>
-                  </div>
-                )}
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* TAB 4: AVAILABLE FOOD (SMART PANTRY MATCHER)                  */}
-        {/* ============================================================== */}
-        {activeTab === "pantry" && (
-          <div className="space-y-8 animate-fade-in">
-            <div className="max-w-2xl">
-              <h2 className="text-xl font-bold text-[#20312F]">
-                “What Can I Eat Right Now?” Pantry Matcher
-              </h2>
-              <p className="text-xs text-[#5A6D6B] mt-0.5">
-                Select ingredients you currently have in your kitchen. We rank recipes into 3 realistic tiers.
-              </p>
-            </div>
-
-            {/* Interactive Pantry Chips */}
-            <div className="p-6 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  "Rice", "Moong Dal", "Toor Dal", "Whole Wheat Atta", "Onions",
-                  "Tomatoes", "Potatoes", "Eggs", "Curd", "Paneer", "Spinach", "Mustard Seeds"
-                ].map((item) => {
-                  const isSelected = pantry.includes(item);
-                  return (
-                    <button
-                      key={item}
-                      onClick={() => handleTogglePantryItem(item)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
-                        isSelected
-                          ? "bg-[#177E75] text-white shadow-xs"
-                          : "bg-[#F7FAFC] text-[#5A6D6B] border border-[#E2ECEB] hover:border-[#42BFA5]"
-                      }`}
-                    >
-                      {isSelected ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                      <span>{item}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Add Custom Ingredient */}
-              <form onSubmit={handleAddCustomPantry} className="flex gap-2">
-                <input
-                  type="text"
-                  value={customPantryInput}
-                  onChange={(e) => setCustomPantryInput(e.target.value)}
-                  placeholder="Add custom ingredient (e.g. Oats, Besan, Ginger)..."
-                  className="flex-1 px-3 py-2 rounded-xl border border-[#E2ECEB] text-xs focus:outline-none focus:border-[#42BFA5]"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-[#42BFA5] text-white text-xs font-bold hover:bg-[#2ba98e]"
-                >
-                  Add
-                </button>
-              </form>
-            </div>
-
-            {/* 3-Tier Recipe Results */}
-            {loadingPantry ? (
-              <div className="p-8 text-center text-xs text-[#8E9F9D]">
-                <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#42BFA5] mb-2" />
-                Matching against authentic Indian recipes...
-              </div>
-            ) : pantryResults && (
-              <div className="space-y-6">
-                
-                {/* Tier 1: Best Available */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-[#E8F7EF] text-[#218C68] text-[10px] font-bold uppercase">
-                      Tier 1: 100% In Kitchen
-                    </span>
-                    <h3 className="font-bold text-sm text-[#20312F]">Best Available Right Now</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(pantryResults.best_available || []).map((recipe: any) => (
-                      <div key={recipe.id} className="p-5 rounded-3xl bg-white border border-[#BCE8DE] card-shadow space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-sm text-[#20312F]">{recipe.recipe_name}</h4>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E9F8F3] text-[#177E75]">
-                            {recipe.prep_time_minutes} min
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#5A6D6B]">{recipe.description}</p>
-                        <div className="flex items-center justify-between pt-2 border-t border-[#EDF3F3] text-xs">
-                          <span className="text-[#8E9F9D]">
-                            <strong>{recipe.matched_count}</strong> of {recipe.total_ingredients} ingredients
-                          </span>
-                          <span className="font-mono font-bold text-[#177E75]">
-                            {recipe.estimated_calories} kcal
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Tier 2: Reasonable Alternatives */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-[#FFF5E5] text-[#B87921] text-[10px] font-bold uppercase">
-                      Tier 2: Minor Substitutions
-                    </span>
-                    <h3 className="font-bold text-sm text-[#20312F]">Reasonable Alternatives</h3>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(pantryResults.reasonable_alternatives || []).map((recipe: any) => (
-                      <div key={recipe.id} className="p-5 rounded-3xl bg-white border border-[#E2ECEB] card-shadow space-y-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-sm text-[#20312F]">{recipe.recipe_name}</h4>
-                          <span className="text-[10px] font-bold text-[#8E9F9D]">{recipe.prep_time_minutes} min</span>
-                        </div>
-                        <div className="text-xs text-[#B87921]">
-                          Missing: {recipe.missing_ingredients?.join(", ")}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* TAB 5: AI GROUNDED NUTRITION COACH                            */}
-        {/* ============================================================== */}
-        {activeTab === "coach" && (
-          <div className="max-w-3xl mx-auto space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-[#20312F]">Grounded Clinical Nutrition Coach</h2>
-                <p className="text-xs text-[#5A6D6B]">
-                  Backed by your logged meals, health records (prediabetes, BP), and ICMR-NIN 2024 standards.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowAISettingsModal(true)}
-                className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 text-xs font-bold transition-all flex items-center gap-1.5"
-              >
-                <Bot className="w-3.5 h-3.5 text-purple-600" />
-                <span>{activeAIProviderName}</span>
-              </button>
-            </div>
-
-            {/* Chat History Container */}
-            <div className="bg-white rounded-3xl border border-[#E2ECEB] card-shadow h-[480px] flex flex-col overflow-hidden">
-              <div className="flex-1 p-6 overflow-y-auto space-y-4">
-                {messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] p-4 rounded-3xl text-xs leading-relaxed whitespace-pre-wrap ${
-                        msg.role === "user"
-                          ? "bg-[#177E75] text-white rounded-br-none"
-                          : "bg-[#F7FAFC] text-[#20312F] border border-[#E2ECEB] rounded-bl-none"
-                      }`}
-                    >
-                      {msg.content}
-                    </div>
-
-                    {/* Suggested follow-up prompt pills */}
-                    {msg.suggested_followups && msg.suggested_followups.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {msg.suggested_followups.map((prompt: string, pIdx: number) => (
-                          <button
-                            key={pIdx}
-                            onClick={() => handleSendMessage(prompt)}
-                            className="px-2.5 py-1 rounded-full bg-[#E9F8F3] hover:bg-[#d5f3e7] text-[#177E75] font-bold text-[10px] transition-colors"
-                          >
-                            + {prompt}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {sendingMsg && (
-                  <div className="flex items-center gap-2 text-xs text-[#8E9F9D]">
-                    <Sparkles className="w-3.5 h-3.5 animate-spin text-[#42BFA5]" />
-                    <span>Coach is consulting ICMR-NIN guidelines & your profile...</span>
-                  </div>
-                )}
-                <div ref={chatBottomRef} />
-              </div>
-
-              {/* Chat Input Bar */}
-              <div className="p-3 border-t border-[#E2ECEB] bg-[#F7FAFC] flex gap-2">
-                <input
-                  type="text"
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendMessage(inputMessage)}
-                  placeholder="Ask your coach anything about Indian meals, portion math, or what to cook..."
-                  className="flex-1 px-4 py-2.5 rounded-2xl border border-[#E2ECEB] text-xs bg-white focus:outline-none focus:border-[#42BFA5]"
-                />
-                <button
-                  onClick={() => handleSendMessage(inputMessage)}
-                  disabled={sendingMsg || !inputMessage.trim()}
-                  className="px-5 py-2.5 rounded-2xl bg-[#177E75] hover:bg-[#126861] text-white text-xs font-bold shadow-xs transition-all disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Send</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================== */}
-        {/* TAB 6: FOOD DATABASE EXPLORER                                 */}
+        {/* TAB 4: FOOD DATABASE EXPLORER                                 */}
         {/* ============================================================== */}
         {activeTab === "database" && (
           <div className="space-y-6 animate-fade-in">
@@ -1125,6 +514,14 @@ export default function NutriVisionWebApp() {
         )}
 
       </main>
+
+      {/* Floating Cute Coach Buddy (Available across ALL tabs) */}
+      <CuteFloatingCoachBuddy
+        userProfile={medicalProfile}
+        totalCalories={totalCalories}
+        totalProtein={totalProtein}
+        onOpenAISettings={() => setShowAISettingsModal(true)}
+      />
 
       {/* Global Modals */}
       <MedicalProfileModal
