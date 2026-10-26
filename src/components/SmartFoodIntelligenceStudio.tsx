@@ -22,10 +22,13 @@ import {
   Leaf,
   Drumstick,
   Heart,
-  Bot
+  Bot,
+  Check,
+  ScanLine
 } from "lucide-react";
 import { UserMedicalProfile } from "./MedicalProfileModal";
 import SuitabilityBadge from "./SuitabilityBadge";
+import { ApiClient } from "@/lib/api";
 
 interface SmartFoodIntelligenceStudioProps {
   userProfile: UserMedicalProfile;
@@ -55,6 +58,11 @@ export default function SmartFoodIntelligenceStudio({
   const [resultsSummary, setResultsSummary] = useState<string>("");
   const [activeProvider, setActiveProvider] = useState<string>("Smart ICMR Engine");
 
+  // Vision AI Scanned Meal State
+  const [isScanningImage, setIsScanningImage] = useState(false);
+  const [scannedMealData, setScannedMealData] = useState<any | null>(null);
+  const [loggedMealSuccess, setLoggedMealSuccess] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -78,6 +86,54 @@ export default function SmartFoodIntelligenceStudio({
     setTextInput(prev => prev ? `${prev}, ${tag}` : tag);
   };
 
+  // Perform Vision AI scan on uploaded or captured image
+  const scanUploadedPhoto = async (file: File) => {
+    setIsScanningImage(true);
+    setScannedMealData(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const aiConf = ApiClient.getAIConfig();
+      const headers: Record<string, string> = {
+        "x-user-goal": userProfile.primary_goal,
+        "x-user-conditions": (userProfile.health_conditions || []).join(",")
+      };
+      if (aiConf.provider) headers["x-ai-provider"] = aiConf.provider;
+      if (aiConf.openaiApiKey) headers["x-openai-key"] = aiConf.openaiApiKey;
+      if (aiConf.openaiModel) headers["x-openai-model"] = aiConf.openaiModel;
+      if (aiConf.geminiApiKey) headers["x-gemini-key"] = aiConf.geminiApiKey;
+      if (aiConf.geminiModel) headers["x-gemini-model"] = aiConf.geminiModel;
+      if (aiConf.localLlmUrl) headers["x-local-llm-url"] = aiConf.localLlmUrl;
+      if (aiConf.localLlmModel) headers["x-local-llm-model"] = aiConf.localLlmModel;
+
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers,
+        body: formData
+      });
+
+      if (res.ok) {
+        const scanData = await res.json();
+        setScannedMealData(scanData);
+        if (scanData.provider) setActiveProvider(scanData.provider);
+
+        // Automatically populate ingredients text box
+        const ingredients = scanData.extracted_ingredients || [];
+        if (ingredients.length > 0) {
+          setTextInput(ingredients.join(", "));
+        }
+
+        // Generate recipes based on scanned ingredients
+        executeRecommendationFetch(ingredients.join(", ") || scanData.multi_item_summary);
+      }
+    } catch (err: any) {
+      console.error("Photo scan error:", err);
+    } finally {
+      setIsScanningImage(false);
+    }
+  };
+
   // Image Upload Handler
   const handleImageSelect = (file: File) => {
     setSelectedFile(file);
@@ -86,6 +142,7 @@ export default function SmartFoodIntelligenceStudio({
       setImagePreview(reader.result as string);
     };
     reader.readAsDataURL(file);
+    scanUploadedPhoto(file);
   };
 
   // Camera Handler
@@ -116,7 +173,9 @@ export default function SmartFoodIntelligenceStudio({
         fetch(dataUrl)
           .then(res => res.blob())
           .then(blob => {
-            setSelectedFile(new File([blob], "camera-capture.jpg", { type: "image/jpeg" }));
+            const capturedFile = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
+            setSelectedFile(capturedFile);
+            scanUploadedPhoto(capturedFile);
           });
       }
       // Stop tracks
@@ -126,39 +185,31 @@ export default function SmartFoodIntelligenceStudio({
     }
   };
 
-  // Execute AI Recommendation Query
-  const generateRecommendations = async () => {
+  // Common function to fetch food intelligence
+  const executeRecommendationFetch = async (queryInput: string) => {
     setLoading(true);
-    setResults(null);
     try {
-      // 1. If image mode and file exists, run optical scan first to extract items
-      let scannedTerms = "";
-      if ((inputMode === "upload" || inputMode === "camera") && selectedFile) {
-        const formData = new FormData();
-        formData.append("file", selectedFile);
-        const scanRes = await fetch("/api/scan", {
-          method: "POST",
-          body: formData
-        });
-        if (scanRes.ok) {
-          const scanData = await scanRes.json();
-          scannedTerms = (scanData.candidates || []).map((c: any) => c.dish_name).join(", ");
-          if (scanData.provider) setActiveProvider(scanData.provider.toUpperCase());
-        }
-      }
-
-      // 2. Query Food Intelligence API
       const payload = {
-        rawInput: scannedTerms || textInput,
-        dishName: textInput,
+        rawInput: queryInput || textInput,
+        dishName: queryInput || textInput,
         userProfile: userProfile,
         dietaryPreference: dietFilter,
         mealType: mealSlot
       };
 
+      const aiConf = ApiClient.getAIConfig();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (aiConf.provider) headers["x-ai-provider"] = aiConf.provider;
+      if (aiConf.openaiApiKey) headers["x-openai-key"] = aiConf.openaiApiKey;
+      if (aiConf.openaiModel) headers["x-openai-model"] = aiConf.openaiModel;
+      if (aiConf.geminiApiKey) headers["x-gemini-key"] = aiConf.geminiApiKey;
+      if (aiConf.geminiModel) headers["x-gemini-model"] = aiConf.geminiModel;
+      if (aiConf.localLlmUrl) headers["x-local-llm-url"] = aiConf.localLlmUrl;
+      if (aiConf.localLlmModel) headers["x-local-llm-model"] = aiConf.localLlmModel;
+
       const res = await fetch("/api/food-intelligence", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload)
       });
 
@@ -167,14 +218,60 @@ export default function SmartFoodIntelligenceStudio({
         setResults(data.recommendations || []);
         setResultsSummary(data.summary || "");
         if (data.provider) setActiveProvider(data.provider.toUpperCase());
-      } else {
-        throw new Error("Unable to fetch recommendations");
       }
+    } catch (err: any) {
+      console.error("Recommendation fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Execute AI Recommendation Query manually
+  const generateRecommendations = async () => {
+    setLoading(true);
+    setResults(null);
+    try {
+      let query = textInput;
+      if ((inputMode === "upload" || inputMode === "camera") && selectedFile && !scannedMealData) {
+        await scanUploadedPhoto(selectedFile);
+        return;
+      }
+      await executeRecommendationFetch(query);
     } catch (err: any) {
       alert("Error: " + (err.message || "Something went wrong"));
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handler to log the scanned meal directly into today's diary
+  const handleLogScannedMeal = () => {
+    if (!scannedMealData) return;
+
+    const mealRecord = {
+      meal_type: mealSlot,
+      items: (scannedMealData.candidates || []).map((c: any) => ({
+        food_name: c.dish_name,
+        quantity: c.suggested_weight_grams || 100,
+        unit: "g",
+        household_measure: c.household_measure,
+        calories: c.calories_est || c.calories || 0,
+        protein: c.protein_est || c.protein || 0,
+        carbs: c.carbs_est || c.carbs || 0,
+        fat: c.fat_est || c.fat || 0,
+        fiber: c.fiber_est || c.fiber || 0,
+      })),
+      total_calories: scannedMealData.total_nutrition?.calories || 0,
+      total_protein: scannedMealData.total_nutrition?.protein_g || 0,
+      total_carbs: scannedMealData.total_nutrition?.carbs_g || 0,
+      total_fiber: scannedMealData.total_nutrition?.fiber_g || 0,
+      total_fat: scannedMealData.total_nutrition?.fat_g || 0,
+      notes: scannedMealData.multi_item_summary || "Scanned Photo Meal"
+    };
+
+    onLogMeal(mealRecord);
+    setLoggedMealSuccess(true);
+    setTimeout(() => setLoggedMealSuccess(false), 3000);
   };
 
   return (
@@ -196,7 +293,7 @@ export default function SmartFoodIntelligenceStudio({
             <p className="text-xs text-teal-100/80 mt-0.5">
               Profile: <strong>{userProfile.age}y {userProfile.gender}</strong> ({userProfile.weight_kg}kg, {userProfile.height_cm}cm) • Diet: <strong>{userProfile.dietary_pattern}</strong> • Goal: <strong>{userProfile.primary_goal.replace(/_/g, " ")}</strong>
             </p>
-            <div className="flex items-center gap-2 mt-1 text-[11px] text-teal-200">
+            <div className="flex items-center gap-2 mt-1 text-[11px] text-teal-200 flex-wrap">
               <span className="flex items-center gap-1">
                 <Heart className="w-3 h-3 text-rose-300" /> Conditions: {userProfile.health_conditions.join(", ") || "None"}
               </span>
@@ -403,21 +500,42 @@ export default function SmartFoodIntelligenceStudio({
                     Click to browse or drop food / ingredients photo
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Supports JPG, PNG, WEBP. Multimodal AI scans your plate or kitchen counter.
+                    Supports JPG, PNG, WEBP. Vision AI automatically extracts all calories, protein, and diet content!
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 max-h-64 flex items-center justify-center bg-black/5">
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 max-h-72 flex items-center justify-center bg-black/5">
                 <img
                   src={imagePreview}
                   alt="Food Preview"
-                  className="max-h-64 object-contain"
+                  className="max-h-72 object-contain"
                 />
+                
+                {/* Vision Scanning Animated Overlay */}
+                {isScanningImage && (
+                  <div className="absolute inset-0 bg-teal-950/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white z-10 animate-in fade-in">
+                    <div className="relative w-16 h-16 flex items-center justify-center mb-3">
+                      <div className="absolute inset-0 rounded-full border-4 border-teal-400 border-t-transparent animate-spin" />
+                      <ScanLine className="w-8 h-8 text-teal-300 animate-pulse" />
+                    </div>
+                    <div className="font-extrabold text-sm tracking-wide text-teal-200">
+                      Analyzing Food & Nutrition via Vision AI...
+                    </div>
+                    <div className="text-xs text-teal-300/80 mt-1">
+                      Identifying items, portions, and ICMR macros
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => { setSelectedFile(null); setImagePreview(null); }}
-                  className="absolute top-3 right-3 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors"
+                  onClick={() => { 
+                    setSelectedFile(null); 
+                    setImagePreview(null); 
+                    setScannedMealData(null);
+                  }}
+                  className="absolute top-3 right-3 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white transition-colors z-20"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -459,16 +577,36 @@ export default function SmartFoodIntelligenceStudio({
                 </div>
               </div>
             ) : imagePreview ? (
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 max-h-64 flex items-center justify-center bg-black/5">
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 max-h-72 flex items-center justify-center bg-black/5">
                 <img
                   src={imagePreview}
                   alt="Captured Food"
-                  className="max-h-64 object-contain"
+                  className="max-h-72 object-contain"
                 />
+                
+                {isScanningImage && (
+                  <div className="absolute inset-0 bg-teal-950/60 backdrop-blur-[2px] flex flex-col items-center justify-center text-white z-10 animate-in fade-in">
+                    <div className="relative w-16 h-16 flex items-center justify-center mb-3">
+                      <div className="absolute inset-0 rounded-full border-4 border-teal-400 border-t-transparent animate-spin" />
+                      <ScanLine className="w-8 h-8 text-teal-300 animate-pulse" />
+                    </div>
+                    <div className="font-extrabold text-sm tracking-wide text-teal-200">
+                      Analyzing Food & Nutrition via Vision AI...
+                    </div>
+                    <div className="text-xs text-teal-300/80 mt-1">
+                      Identifying items, portions, and ICMR macros
+                    </div>
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => { setImagePreview(null); startCamera(); }}
-                  className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-bold transition-colors"
+                  onClick={() => { 
+                    setImagePreview(null); 
+                    setScannedMealData(null); 
+                    startCamera(); 
+                  }}
+                  className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 text-white text-xs font-bold transition-colors z-20"
                 >
                   Retake Photo
                 </button>
@@ -505,6 +643,158 @@ export default function SmartFoodIntelligenceStudio({
         </div>
 
       </div>
+
+      {/* ============================================================== */}
+      {/* 📸 SCANNED PHOTO MEAL DIET CONTENT (APPEARS WHEN PHOTO UPLOADED) */}
+      {/* ============================================================== */}
+      {scannedMealData && (
+        <div className="p-6 rounded-3xl bg-gradient-to-br from-emerald-50/90 via-white to-teal-50/70 border-2 border-teal-500 shadow-xl space-y-5 animate-in fade-in">
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-teal-100">
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-black px-3 py-1 rounded-full bg-teal-600 text-white uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
+                  <Camera className="w-3.5 h-3.5" /> Scanned Meal Diet Content
+                </span>
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-teal-100 text-teal-900 capitalize">
+                  Slot: {mealSlot}
+                </span>
+                <span className="text-[11px] text-teal-700 font-semibold">
+                  via {scannedMealData.provider}
+                </span>
+              </div>
+              <h3 className="text-xl font-black text-slate-900 mt-2 tracking-tight">
+                {scannedMealData.multi_item_summary}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {scannedMealData.scan_uncertainty_note}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogScannedMeal}
+              className={`px-5 py-3 rounded-2xl text-xs font-black transition-all shadow-md flex items-center gap-2 shrink-0 ${
+                loggedMealSuccess
+                  ? "bg-emerald-600 text-white ring-2 ring-emerald-300"
+                  : "bg-teal-600 hover:bg-teal-700 text-white hover:shadow-lg"
+              }`}
+            >
+              {loggedMealSuccess ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Logged to Cute Diary!
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Log Scanned Meal to Diary ({mealSlot})
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Grand Total Nutrition Diet Breakdown for Scanned Meal */}
+          <div>
+            <div className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <Flame className="w-3.5 h-3.5 text-amber-500" />
+              Total Nutritional Content in This Photo:
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
+              <div className="p-3 rounded-2xl bg-white border border-teal-200/80 text-center shadow-2xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Calories</div>
+                <div className="text-lg font-black text-teal-800 font-mono mt-0.5">
+                  {scannedMealData.total_nutrition?.calories} <span className="text-[10px] font-normal text-slate-500">kcal</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white border border-blue-200/80 text-center shadow-2xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Protein</div>
+                <div className="text-lg font-black text-blue-700 font-mono mt-0.5">
+                  {scannedMealData.total_nutrition?.protein_g} <span className="text-[10px] font-normal text-slate-500">g</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white border border-amber-200/80 text-center shadow-2xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Carbohydrates</div>
+                <div className="text-lg font-black text-amber-700 font-mono mt-0.5">
+                  {scannedMealData.total_nutrition?.carbs_g} <span className="text-[10px] font-normal text-slate-500">g</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white border border-orange-200/80 text-center shadow-2xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Healthy Fats</div>
+                <div className="text-lg font-black text-orange-700 font-mono mt-0.5">
+                  {scannedMealData.total_nutrition?.fat_g} <span className="text-[10px] font-normal text-slate-500">g</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white border border-emerald-200/80 text-center shadow-2xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Dietary Fiber</div>
+                <div className="text-lg font-black text-emerald-700 font-mono mt-0.5">
+                  {scannedMealData.total_nutrition?.fiber_g} <span className="text-[10px] font-normal text-slate-500">g</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-white border border-rose-200/80 text-center shadow-2xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Sodium</div>
+                <div className="text-lg font-black text-rose-700 font-mono mt-0.5">
+                  {scannedMealData.total_nutrition?.sodium_mg} <span className="text-[10px] font-normal text-slate-500">mg</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Individual Recognized Dishes on Plate */}
+          <div>
+            <div className="text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Utensils className="w-3.5 h-3.5 text-teal-600" />
+              Recognized Food Components & Portions ({scannedMealData.candidates?.length}):
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(scannedMealData.candidates || []).map((c: any, idx: number) => (
+                <div 
+                  key={idx} 
+                  className="p-3 rounded-2xl bg-white/90 border border-slate-200/80 flex items-center justify-between text-xs"
+                >
+                  <div>
+                    <div className="font-bold text-slate-800">{c.dish_name}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Portion: <strong>{c.household_measure}</strong> ({c.suggested_weight_grams}g)
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono font-bold text-teal-700">{c.calories_est || c.calories} kcal</div>
+                    <div className="text-[10px] text-blue-600 font-mono">{c.protein_est || c.protein}g protein</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Clinical Suitability Verdict */}
+          {scannedMealData.clinical_verdict && (
+            <div className="p-3.5 rounded-2xl bg-teal-100/60 border border-teal-200 text-xs text-teal-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Heart className="w-4 h-4 text-teal-700 shrink-0" />
+                <span>
+                  <strong>Goal Alignment:</strong> {scannedMealData.clinical_verdict.helps_in_goal}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {scannedMealData.clinical_verdict.suitability_badges?.map((b: string, i: number) => (
+                  <span key={i} className="px-2 py-0.5 rounded-full bg-white text-teal-900 font-bold text-[10.5px] shadow-2xs border border-teal-200">
+                    {b}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* Results Section: The 3 Answers */}
       {results && results.length > 0 && (() => {
@@ -577,15 +867,15 @@ export default function SmartFoodIntelligenceStudio({
                         items: [{
                           food_name: topRec.dish_name,
                           weight_grams: 250,
-                          calories: topRec.nutrition.calories,
-                          protein: topRec.nutrition.protein_g,
-                          carbs: topRec.nutrition.carbs_g,
-                          fiber: topRec.nutrition.fiber_g
+                          calories: topRec.nutrition?.calories || topRec.calories || 0,
+                          protein: topRec.nutrition?.protein_g || topRec.protein_g || 0,
+                          carbs: topRec.nutrition?.carbs_g || topRec.carbs_g || 0,
+                          fiber: topRec.nutrition?.fiber_g || topRec.fiber_g || 0
                         }],
-                        total_calories: topRec.nutrition.calories,
-                        total_protein: topRec.nutrition.protein_g,
-                        total_carbs: topRec.nutrition.carbs_g,
-                        total_fiber: topRec.nutrition.fiber_g
+                        total_calories: topRec.nutrition?.calories || topRec.calories || 0,
+                        total_protein: topRec.nutrition?.protein_g || topRec.protein_g || 0,
+                        total_carbs: topRec.nutrition?.carbs_g || topRec.carbs_g || 0,
+                        total_fiber: topRec.nutrition?.fiber_g || topRec.fiber_g || 0
                       });
                       alert(`Logged "#1 Top Pick: ${topRec.dish_name}" to your ${mealSlot.toUpperCase()} Diary!`);
                     }}
@@ -599,172 +889,153 @@ export default function SmartFoodIntelligenceStudio({
                 <div className="p-3.5 rounded-2xl bg-amber-100/70 border border-amber-300 text-xs text-amber-950 flex items-start gap-2.5 shadow-2xs">
                   <Sparkles className="w-4 h-4 text-amber-700 shrink-0 mt-0.5 animate-pulse" />
                   <div>
-                    <strong>Why AI Selected This As Your #1 Match:</strong>{" "}
-                    {topRec.recommendation_reason || `Directly uses your listed ingredients and delivers ${topRec.nutrition?.protein_g}g protein tailored for your ${userProfile.primary_goal.replace(/_/g, " ")} goal.`}
+                    <strong className="font-bold">Why this is your #1 Top Choice: </strong>
+                    <span>{topRec.why_top_pick || topRec.recommendation_reason || "Perfect match for your listed ingredients and ICMR daily goals."}</span>
                   </div>
                 </div>
 
-                {/* 3 Core Pillars for Top Rec */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 divide-y lg:divide-y-0 lg:divide-x divide-teal-100 pt-2">
+                {/* 3 Pillars Grid: What To Make, How Much To Eat, How It Helps You */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   
-                  {/* Pillar 1 */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-teal-800 font-bold text-sm">
-                      <ChefHat className="w-4 h-4 text-teal-600" />
-                      <h4>1. Preparation Guide</h4>
+                  {/* Pillar 1: How Much to Eat (Portion Guidance) */}
+                  <div className="p-4 rounded-2xl bg-white border border-teal-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center gap-2 text-teal-800 font-extrabold text-xs uppercase tracking-wider">
+                      <Scale className="w-4 h-4 text-teal-600" />
+                      Answer 1: Exact Portion
                     </div>
-                    <div className="space-y-2">
-                      {(topRec.quick_steps || []).map((step: string, sIdx: number) => (
-                        <div key={sIdx} className="flex items-start gap-2 text-xs text-slate-700 leading-relaxed">
-                          <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-800 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
-                            {sIdx + 1}
-                          </span>
-                          <span>{step}</span>
+                    <div className="text-sm font-black text-slate-900">
+                      {topRec.portion_guidance?.household_measure || topRec.default_serving_size || "1 serving"}
+                    </div>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {topRec.portion_guidance?.reasoning || "Standard ICMR portion calibrated to your weight and metabolic target."}
+                    </p>
+                  </div>
+
+                  {/* Pillar 2: Nutrition Profile */}
+                  <div className="p-4 rounded-2xl bg-white border border-teal-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center gap-2 text-blue-800 font-extrabold text-xs uppercase tracking-wider">
+                      <Flame className="w-4 h-4 text-blue-600" />
+                      Answer 2: Nutrition Content
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      <div className="p-1.5 rounded-xl bg-slate-50 border border-slate-100">
+                        <div className="text-[10px] text-slate-400 font-bold">Calories</div>
+                        <div className="text-xs font-black text-slate-800 font-mono">
+                          {topRec.nutrition?.calories || topRec.calories}
                         </div>
+                      </div>
+                      <div className="p-1.5 rounded-xl bg-blue-50 border border-blue-100">
+                        <div className="text-[10px] text-blue-700 font-bold">Protein</div>
+                        <div className="text-xs font-black text-blue-800 font-mono">
+                          {topRec.nutrition?.protein_g || topRec.protein_g}g
+                        </div>
+                      </div>
+                      <div className="p-1.5 rounded-xl bg-amber-50 border border-amber-100">
+                        <div className="text-[10px] text-amber-700 font-bold">Fiber</div>
+                        <div className="text-xs font-black text-amber-800 font-mono">
+                          {topRec.nutrition?.fiber_g || topRec.fiber_g}g
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-slate-500 text-center font-mono">
+                      Carbs: {topRec.nutrition?.carbs_g || topRec.carbs_g}g • Fat: {topRec.nutrition?.fat_g || topRec.fat_g}g
+                    </div>
+                  </div>
+
+                  {/* Pillar 3: How This Will Help You In This Kind of Goal */}
+                  <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 shadow-2xs space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-900 font-extrabold text-xs uppercase tracking-wider">
+                      <Heart className="w-4 h-4 text-emerald-600" />
+                      Answer 3: How This Helps You
+                    </div>
+                    <p className="text-xs text-emerald-950 leading-relaxed">
+                      {topRec.goal_impact?.helps_in_goal || topRec.goal_impact?.how_it_helps || "Directly advances your health targets."}
+                    </p>
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {topRec.goal_impact?.benefit_badges?.map((badge: string, i: number) => (
+                        <span key={i} className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white text-emerald-800 border border-emerald-300">
+                          {badge}
+                        </span>
                       ))}
                     </div>
                   </div>
 
-                  {/* Pillar 2 */}
-                  <div className="pt-4 lg:pt-0 lg:px-4 space-y-3">
-                    <div className="flex items-center gap-2 text-blue-900 font-bold text-sm">
-                      <Scale className="w-4 h-4 text-blue-600" />
-                      <h4>2. How Much Should You Eat?</h4>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-2">
-                      <div className="text-xs font-extrabold text-blue-950 font-mono">
-                        Serving Size: {topRec.portion_guidance?.serving_size}
-                      </div>
-                      <p className="text-xs text-blue-900 leading-relaxed">
-                        {topRec.portion_guidance?.reasoning}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Pillar 3 */}
-                  <div className="pt-4 lg:pt-0 lg:pl-4 space-y-3">
-                    <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
-                      <Target className="w-4 h-4 text-emerald-600" />
-                      <h4>3. What You Get & Goal Impact</h4>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                        <div className="text-[10px] text-slate-400 font-bold">CALORIES</div>
-                        <div className="text-sm font-extrabold text-teal-800 font-mono">
-                          {topRec.nutrition?.calories}
-                        </div>
-                      </div>
-                      <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                        <div className="text-[10px] text-slate-400 font-bold">PROTEIN</div>
-                        <div className="text-sm font-extrabold text-blue-800 font-mono">
-                          {topRec.nutrition?.protein_g}g
-                        </div>
-                      </div>
-                      <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-2xs">
-                        <div className="text-[10px] text-slate-400 font-bold">FIBER</div>
-                        <div className="text-sm font-extrabold text-emerald-800 font-mono">
-                          {topRec.nutrition?.fiber_g}g
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-black text-emerald-950">
-                        <Sparkles className="w-4 h-4 text-emerald-600" />
-                        <span>🌟 THIS WILL HELP YOU IN:</span>
-                      </div>
-                      <p className="text-xs text-slate-800 leading-relaxed">
-                        {topRec.goal_impact?.helps_in_goal?.replace(/\*\*/g, "") || topRec.goal_impact?.how_it_helps}
-                      </p>
-                      {topRec.goal_impact?.helps_in_conditions && (
-                        <p className="text-xs text-teal-900 pt-1 border-t border-emerald-200/60 leading-relaxed">
-                          {topRec.goal_impact.helps_in_conditions.replace(/\*\*/g, "")}
-                        </p>
-                      )}
-                    </div>
-
-                  </div>
-
                 </div>
+
+                {/* Quick 2-Minute Preparation Steps */}
+                {topRec.quick_steps && topRec.quick_steps.length > 0 && (
+                  <div className="p-4 rounded-2xl bg-white border border-teal-100 space-y-2">
+                    <div className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🍳</span> Quick Cooking Steps:
+                    </div>
+                    <ol className="list-decimal list-inside space-y-1 text-xs text-slate-600">
+                      {topRec.quick_steps.map((st: string, idx: number) => (
+                        <li key={idx} className="leading-relaxed">{st}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
 
               </div>
             )}
 
             {/* ============================================================== */}
-            {/* MORE OPTIONS: 4 TO 6+ DIVERSE DISHES                           */}
+            {/* OTHER MEAL OPTIONS GENERATED FOR YOU                           */}
             {/* ============================================================== */}
             {otherRecs.length > 0 && (
               <div className="space-y-4 pt-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                    <span>🍽️ More Dishes You Can Make</span>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      {otherRecs.length} Options
-                    </span>
+                  <h4 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <span>Alternative {mealSlot.toUpperCase()} Dishes You Can Make ({otherRecs.length})</span>
                   </h4>
-                  <span className="text-xs text-slate-500">
-                    All strictly using your listed ingredients
-                  </span>
+                  <span className="text-xs text-slate-500">All matched to your ingredients</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {otherRecs.map((rec, oIdx) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {otherRecs.map((dish, idx) => (
                     <div
-                      key={oIdx}
-                      className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                      key={idx}
+                      className="p-5 rounded-3xl bg-white border border-slate-200/90 hover:border-teal-300 shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4"
                     >
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            rec.is_vegetarian 
+                            dish.is_vegetarian 
                               ? "bg-emerald-100 text-emerald-800" 
                               : "bg-rose-100 text-rose-800"
                           }`}>
-                            {rec.is_vegetarian ? "🥬 Vegetarian" : "🍗 Non-Veg"}
+                            {dish.is_vegetarian ? "🥬 Veg" : "🍗 Non-Veg"}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-400" /> {rec.prep_time_minutes} min
+                          <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {dish.prep_time_minutes} min
                           </span>
                         </div>
 
-                        <div>
-                          <h5 className="font-extrabold text-base text-slate-900">{rec.dish_name}</h5>
-                          <div className="text-[11px] text-slate-500 mt-1">
-                            <strong>Uses:</strong> {rec.ingredients_used?.join(", ")}
+                        <h5 className="font-bold text-base text-slate-900">
+                          {dish.dish_name || dish.name}
+                        </h5>
+
+                        <div className="text-xs text-slate-500">
+                          <strong>Ingredients:</strong> {dish.ingredients_used?.join(", ") || dish.essential_ingredients?.join(", ")}
+                        </div>
+
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1 text-xs text-slate-700">
+                          <div className="flex items-center justify-between text-slate-500 font-mono text-[11px]">
+                            <span>Portion: <strong>{dish.portion_guidance?.household_measure || dish.default_serving_size || "1 bowl"}</strong></span>
+                            <span className="font-bold text-teal-700">{dish.nutrition?.calories || dish.calories} kcal</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[11px] font-mono text-slate-600">
+                            <span>Protein: <strong>{dish.nutrition?.protein_g || dish.protein_g}g</strong></span>
+                            <span>Carbs: <strong>{dish.nutrition?.carbs_g || dish.carbs_g}g</strong></span>
+                            <span>Fiber: <strong>{dish.nutrition?.fiber_g || dish.fiber_g}g</strong></span>
                           </div>
                         </div>
 
-                        {/* Macro Chips */}
-                        <div className="grid grid-cols-3 gap-1.5 p-2 rounded-2xl bg-slate-50 text-center text-[10px]">
-                          <div>
-                            <span className="text-slate-400 block font-bold">KCAL</span>
-                            <strong className="text-teal-900 font-mono text-xs">{rec.nutrition?.calories}</strong>
+                        {dish.goal_impact?.helps_in_goal && (
+                          <div className="text-[11px] text-emerald-900 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-200/60 leading-relaxed">
+                            <strong>How this helps you:</strong> {dish.goal_impact.helps_in_goal}
                           </div>
-                          <div>
-                            <span className="text-slate-400 block font-bold">PROTEIN</span>
-                            <strong className="text-blue-700 font-mono text-xs">{rec.nutrition?.protein_g}g</strong>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block font-bold">FIBER</span>
-                            <strong className="text-emerald-700 font-mono text-xs">{rec.nutrition?.fiber_g}g</strong>
-                          </div>
-                        </div>
-
-                        {/* Serving guidance */}
-                        <div className="text-[11px] text-slate-600 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100">
-                          <strong>Portion:</strong> {rec.portion_guidance?.serving_size} • {rec.portion_guidance?.reasoning}
-                        </div>
-
-                        {/* How it helps */}
-                        <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-[11px] text-emerald-950 space-y-1">
-                          <span className="font-bold text-[10px] uppercase text-emerald-900 block">
-                            💡 THIS WILL HELP YOU IN:
-                          </span>
-                          <p className="text-slate-700 leading-relaxed text-[11px]">
-                            {rec.goal_impact?.helps_in_goal?.replace(/\*\*/g, "") || rec.goal_impact?.how_it_helps}
-                          </p>
-                        </div>
+                        )}
                       </div>
 
                       <button
@@ -773,23 +1044,23 @@ export default function SmartFoodIntelligenceStudio({
                           onLogMeal({
                             meal_type: mealSlot,
                             items: [{
-                              food_name: rec.dish_name,
-                              weight_grams: 220,
-                              calories: rec.nutrition.calories,
-                              protein: rec.nutrition.protein_g,
-                              carbs: rec.nutrition.carbs_g,
-                              fiber: rec.nutrition.fiber_g
+                              food_name: dish.dish_name || dish.name,
+                              weight_grams: 200,
+                              calories: dish.nutrition?.calories || dish.calories || 0,
+                              protein: dish.nutrition?.protein_g || dish.protein_g || 0,
+                              carbs: dish.nutrition?.carbs_g || dish.carbs_g || 0,
+                              fiber: dish.nutrition?.fiber_g || dish.fiber_g || 0
                             }],
-                            total_calories: rec.nutrition.calories,
-                            total_protein: rec.nutrition.protein_g,
-                            total_carbs: rec.nutrition.carbs_g,
-                            total_fiber: rec.nutrition.fiber_g
+                            total_calories: dish.nutrition?.calories || dish.calories || 0,
+                            total_protein: dish.nutrition?.protein_g || dish.protein_g || 0,
+                            total_carbs: dish.nutrition?.carbs_g || dish.carbs_g || 0,
+                            total_fiber: dish.nutrition?.fiber_g || dish.fiber_g || 0
                           });
-                          alert(`Logged "${rec.dish_name}" to your ${mealSlot.toUpperCase()} Diary!`);
+                          alert(`Added "${dish.dish_name || dish.name}" to today's ${mealSlot.toUpperCase()} diary!`);
                         }}
-                        className="w-full py-2.5 rounded-xl bg-[#E9F8F3] hover:bg-[#d4f2e5] text-[#177E75] font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                        className="w-full py-2.5 rounded-2xl bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Log to {mealSlot.toUpperCase()} Diary
+                        <Plus className="w-3.5 h-3.5" /> Log This Option to Diary
                       </button>
                     </div>
                   ))}

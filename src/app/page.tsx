@@ -581,8 +581,14 @@ export default function NutriVisionWebApp() {
       {/* Global Modals */}
       <MedicalProfileModal
         isOpen={showMedicalModal}
+        initialProfile={medicalProfile}
         onClose={() => setShowMedicalModal(false)}
-        onProfileUpdated={(updated) => setMedicalProfile(updated)}
+        onProfileUpdated={(updated) => {
+          setMedicalProfile(updated);
+          try {
+            localStorage.setItem("nutrivision_user_profile", JSON.stringify(updated));
+          } catch {}
+        }}
       />
 
       <AISettingsModal
