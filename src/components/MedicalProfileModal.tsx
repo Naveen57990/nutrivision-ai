@@ -434,7 +434,17 @@ export default function MedicalProfileModal({
     }
   }, [isOpen, initialProfile]);
 
-  if (!isOpen) return null;
+  // Filtered conditions for search and category
+  const filteredConditions = useMemo(() => {
+    return COMPREHENSIVE_CONDITIONS.filter(cond => {
+      const matchesCategory = conditionCategory === "all" || cond.category === conditionCategory;
+      const matchesSearch = !conditionSearch.trim() || 
+        cond.label.toLowerCase().includes(conditionSearch.toLowerCase()) ||
+        cond.tag.toLowerCase().includes(conditionSearch.toLowerCase()) ||
+        cond.icmrGuidance.toLowerCase().includes(conditionSearch.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [conditionCategory, conditionSearch]);
 
   // Real-time ICMR-NIN 2024 Math Calculations
   const calculateTargets = (curr: UserMedicalProfile): UserMedicalProfile => {
@@ -574,21 +584,11 @@ export default function MedicalProfileModal({
     }, 700);
   };
 
-  // Filtered conditions for search and category
-  const filteredConditions = useMemo(() => {
-    return COMPREHENSIVE_CONDITIONS.filter(cond => {
-      const matchesCategory = conditionCategory === "all" || cond.category === conditionCategory;
-      const matchesSearch = !conditionSearch.trim() || 
-        cond.label.toLowerCase().includes(conditionSearch.toLowerCase()) ||
-        cond.tag.toLowerCase().includes(conditionSearch.toLowerCase()) ||
-        cond.icmrGuidance.toLowerCase().includes(conditionSearch.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [conditionCategory, conditionSearch]);
-
   const currentWeight = parseFloat(weightStr) || profile.weight_kg || 72;
   const currentHeight = parseInt(heightStr, 10) || profile.height_cm || 175;
   const bmi = (currentWeight / ((currentHeight / 100) ** 2)).toFixed(1);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">

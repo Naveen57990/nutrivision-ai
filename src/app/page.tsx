@@ -655,29 +655,33 @@ export default function NutriVisionWebApp() {
       />
 
       {/* Global Modals */}
-      <MedicalProfileModal
-        isOpen={showMedicalModal}
-        initialProfile={medicalProfile}
-        onClose={() => setShowMedicalModal(false)}
-        onProfileUpdated={(updated) => {
-          setMedicalProfile(updated);
-          try {
-            localStorage.setItem("nutrivision_user_profile", JSON.stringify(updated));
-          } catch {}
-        }}
-      />
+      {showMedicalModal && (
+        <MedicalProfileModal
+          isOpen={showMedicalModal}
+          initialProfile={medicalProfile}
+          onClose={() => setShowMedicalModal(false)}
+          onProfileUpdated={(updated) => {
+            setMedicalProfile(updated);
+            try {
+              localStorage.setItem("nutrivision_user_profile", JSON.stringify(updated));
+            } catch {}
+          }}
+        />
+      )}
 
-      <AISettingsModal
-        isOpen={showAISettingsModal}
-        onClose={() => setShowAISettingsModal(false)}
-        onConfigSaved={(conf) => {
-          setActiveAIProviderName(
-            conf.provider === "openai" ? "OpenAI GPT-4o" :
-            conf.provider === "gemini" ? "Google Gemini" :
-            conf.provider === "local" ? "Local Ollama" : "Smart Auto"
-          );
-        }}
-      />
+      {showAISettingsModal && (
+        <AISettingsModal
+          isOpen={showAISettingsModal}
+          onClose={() => setShowAISettingsModal(false)}
+          onConfigSaved={(conf) => {
+            setActiveAIProviderName(
+              conf.provider === "openai" ? "OpenAI GPT-4o" :
+              conf.provider === "gemini" ? "Google Gemini" :
+              conf.provider === "local" ? "Local Ollama" : "Smart Auto"
+            );
+          }}
+        />
+      )}
 
     </div>
   );

@@ -54,8 +54,6 @@ export function AISettingsModal({ isOpen, onClose, onConfigSaved }: AISettingsMo
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const handleTestConnection = async () => {
     setTesting(true);
     setTestResult(null);
@@ -77,6 +75,8 @@ export function AISettingsModal({ isOpen, onClose, onConfigSaved }: AISettingsMo
     if (onConfigSaved) onConfigSaved(config);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
