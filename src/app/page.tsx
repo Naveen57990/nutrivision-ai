@@ -35,6 +35,7 @@ import { AISettingsModal } from "@/components/AISettingsModal";
 import SmartFoodIntelligenceStudio from "@/components/SmartFoodIntelligenceStudio";
 import CuteHealthDiary from "@/components/CuteHealthDiary";
 import CuteFloatingCoachBuddy from "@/components/CuteFloatingCoachBuddy";
+import CuteAIConnectionBadge from "@/components/CuteAIConnectionBadge";
 import { ApiClient } from "@/lib/api";
 import { DISH_DATABASE } from "@/lib/recipe_database";
 
@@ -70,7 +71,7 @@ const INITIAL_PROFILE: UserMedicalProfile = {
 
 export default function NutriVisionWebApp() {
   const [activeTab, setActiveTab] = useState<
-    "food_intelligence" | "diary" | "dashboard" | "water" | "database"
+    "food_intelligence" | "diary" | "dashboard" | "water" | "database" | "profile"
   >("food_intelligence");
 
   // Medical Profile State
@@ -200,15 +201,19 @@ export default function NutriVisionWebApp() {
               { id: "food_intelligence", label: "🍳 AI Food Studio", icon: ChefHat },
               { id: "diary", label: "📖 Cute Diary & Tracker", icon: BookOpen },
               { id: "water", label: "💧 Pure Water", icon: Droplet },
-              { id: "database", label: "🍲 Food Database", icon: Search }
+              { id: "database", label: "🍲 Food Database", icon: Search },
+              { id: "profile", label: "👤 Health Profile", icon: User }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    if (tab.id === "profile") setShowMedicalModal(true);
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isActive
                       ? "bg-white text-[#147269] shadow-xs ring-1 ring-teal-500/20"
                       : "text-[#5F4E40] hover:text-[#2C2016] hover:bg-white/60"
@@ -221,23 +226,22 @@ export default function NutriVisionWebApp() {
             })}
           </nav>
 
-          {/* Quick Action Pills: Medical Profile & AI Provider Settings */}
+          {/* Quick Action Pills: Cute Live AI Status & Medical Profile */}
           <div className="flex items-center gap-2.5">
             
-            {/* AI Provider Status Pill */}
-            <button
-              onClick={() => setShowAISettingsModal(true)}
-              title="Configure OpenAI, Gemini, or Local Ollama"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-900 text-xs font-bold transition-colors shadow-xs"
-            >
-              <Bot className="w-3.5 h-3.5 text-purple-600" />
-              <span>{activeAIProviderName}</span>
-            </button>
+            {/* Cute Live AI Status Badge */}
+            <CuteAIConnectionBadge 
+              onOpenSettings={() => setShowAISettingsModal(true)} 
+              variant="pill"
+            />
 
             {/* User Medical Profile Pill */}
             <button
-              onClick={() => setShowMedicalModal(true)}
-              className="flex items-center gap-2.5 p-1.5 pr-3 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-all text-left group"
+              onClick={() => {
+                setActiveTab("profile");
+                setShowMedicalModal(true);
+              }}
+              className="flex items-center gap-2.5 p-1.5 pr-3 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-all text-left group cursor-pointer"
             >
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-teal-600 to-teal-800 text-white flex items-center justify-center text-xs font-black shadow-xs">
                 {medicalProfile.gender === "female" ? "F" : "M"}
@@ -260,16 +264,20 @@ export default function NutriVisionWebApp() {
         <div className="md:hidden flex items-center justify-around border-t border-[#EADBCE] bg-white px-2 py-2">
           {[
             { id: "food_intelligence", label: "Studio", icon: ChefHat },
-            { id: "diary", label: "Diary & Tracker", icon: BookOpen },
+            { id: "diary", label: "Diary", icon: BookOpen },
             { id: "water", label: "Water", icon: Droplet },
-            { id: "database", label: "Foods", icon: Search }
+            { id: "database", label: "Foods", icon: Search },
+            { id: "profile", label: "Profile", icon: User }
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  if (tab.id === "profile") setShowMedicalModal(true);
+                }}
                 className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-bold ${
                   isActive ? "text-[#177E75] bg-[#E9F8F3]" : "text-[#8E9F9D]"
                 }`}
@@ -565,6 +573,74 @@ export default function NutriVisionWebApp() {
                   ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 5: PERSONALIZED HEALTH PROFILE DASHBOARD                   */}
+        {/* ============================================================== */}
+        {activeTab === "profile" && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="p-6 rounded-3xl bg-white border border-[#EADBCE] shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black px-3 py-1 rounded-full bg-teal-100 text-teal-900 uppercase tracking-wider">
+                    ICMR-NIN 2024 Calibrated
+                  </span>
+                  <span className="text-xs text-slate-500 font-bold">
+                    Age {medicalProfile.age} • {medicalProfile.weight_kg}kg • {medicalProfile.height_cm}cm
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mt-1.5 tracking-tight">
+                  Your Personal Health & Medical Profile
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dietary pattern: <strong className="capitalize">{medicalProfile.dietary_pattern}</strong> • Goal: <strong>{medicalProfile.primary_goal.replace(/_/g, " ")}</strong> • Active conditions: <strong>{medicalProfile.health_conditions.join(", ") || "None"}</strong>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowMedicalModal(true)}
+                  className="px-5 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition-all shadow-md flex items-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Edit Medical Profile & Conditions</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Daily Targets Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+              <div className="p-4 rounded-3xl bg-white border border-slate-200/90 text-center shadow-xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Daily Calorie Target</div>
+                <div className="text-xl font-black text-teal-800 font-mono mt-1">
+                  {medicalProfile.daily_calorie_target} <span className="text-xs font-normal text-slate-500">kcal</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-3xl bg-white border border-slate-200/90 text-center shadow-xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Protein Target</div>
+                <div className="text-xl font-black text-blue-700 font-mono mt-1">
+                  {medicalProfile.daily_protein_target_g} <span className="text-xs font-normal text-slate-500">g</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-3xl bg-white border border-slate-200/90 text-center shadow-xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Carb Ceiling</div>
+                <div className="text-xl font-black text-amber-700 font-mono mt-1">
+                  {medicalProfile.daily_carb_target_g} <span className="text-xs font-normal text-slate-500">g</span>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-3xl bg-white border border-slate-200/90 text-center shadow-xs">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Fiber Target</div>
+                <div className="text-xl font-black text-emerald-700 font-mono mt-1">
+                  {medicalProfile.daily_fiber_target_g} <span className="text-xs font-normal text-slate-500">g</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
