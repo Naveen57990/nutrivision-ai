@@ -82,6 +82,7 @@ export default function NutriVisionWebApp() {
 
   // Daily Tracker State (Real data only, default empty)
   const [meals, setMeals] = useState<any[]>([]);
+  const [diaryUpdateKey, setDiaryUpdateKey] = useState<number>(Date.now());
 
   // Food Database Explorer State
   const [foods, setFoods] = useState<any[]>([]);
@@ -148,14 +149,25 @@ export default function NutriVisionWebApp() {
         reflection_note: ""
       };
 
+      const totalCal = meal.total_calories || meal.calories || 0;
+      const totalProt = meal.total_protein || meal.protein || 0;
+      const totalCarb = meal.total_carbs || meal.carbs || 0;
+      const totalFib = meal.total_fiber || meal.fiber || 0;
+      const totalFat = meal.total_fat !== undefined 
+        ? meal.total_fat 
+        : (meal.fat !== undefined ? meal.fat : Math.max(0, Math.round((totalCal - (totalProt * 4 + totalCarb * 4)) / 9)));
+      const totalSodium = meal.total_sodium || meal.sodium || Math.round(totalCal * 0.7);
+
       const newFoodItem = {
         id: "food-" + Date.now(),
-        name: meal.items?.[0]?.food_name || meal.dish_name || "Custom Dish",
+        name: meal.items?.[0]?.food_name || meal.dish_name || meal.name || "Custom Dish",
         meal_slot: meal.meal_type || "breakfast",
-        calories: meal.total_calories || meal.calories || 0,
-        protein_g: meal.total_protein || meal.protein || 0,
-        carbs_g: meal.total_carbs || meal.carbs || 0,
-        fiber_g: meal.total_fiber || meal.fiber || 0,
+        calories: totalCal,
+        protein_g: totalProt,
+        carbs_g: totalCarb,
+        fat_g: totalFat,
+        fiber_g: totalFib,
+        sodium_mg: totalSodium,
         portion: "1 serving",
         time_logged: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       };
@@ -165,6 +177,11 @@ export default function NutriVisionWebApp() {
         meals: [...existingToday.meals, newFoodItem]
       };
       localStorage.setItem("nutrivision_real_diary_records_v3", JSON.stringify(records));
+      setDiaryUpdateKey(Date.now());
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("nutrivision_meal_logged", { detail: newFoodItem }));
+      }
     } catch (e) {
       console.error("Diary sync error:", e);
     }
@@ -259,39 +276,10 @@ export default function NutriVisionWebApp() {
 
           </div>
         </div>
-
-        {/* Mobile Navigation Rail */}
-        <div className="md:hidden flex items-center justify-around border-t border-[#EADBCE] bg-white px-2 py-2">
-          {[
-            { id: "food_intelligence", label: "Studio", icon: ChefHat },
-            { id: "diary", label: "Diary", icon: BookOpen },
-            { id: "water", label: "Water", icon: Droplet },
-            { id: "database", label: "Foods", icon: Search },
-            { id: "profile", label: "Profile", icon: User }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id as any);
-                  if (tab.id === "profile") setShowMedicalModal(true);
-                }}
-                className={`flex flex-col items-center py-1.5 px-3 rounded-xl text-[10px] font-bold ${
-                  isActive ? "text-[#177E75] bg-[#E9F8F3]" : "text-[#8E9F9D]"
-                }`}
-              >
-                <Icon className="w-4 h-4 mb-0.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
       </header>
 
       {/* Main App Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 pb-32 md:pb-12 space-y-8">
 
         {/* ============================================================== */}
         {/* TAB 1: FLAGSHIP AI FOOD INTELLIGENCE & RECIPE STUDIO          */}
@@ -317,6 +305,7 @@ export default function NutriVisionWebApp() {
         {(activeTab === "diary" || (activeTab as any) === "dashboard") && (
           <div className="space-y-6 animate-fade-in">
             <CuteHealthDiary
+              key={diaryUpdateKey}
               userProfile={medicalProfile}
               onOpenAIShop={() => {
                 setActiveTab("food_intelligence");
@@ -682,6 +671,40 @@ export default function NutriVisionWebApp() {
           }}
         />
       )}
+
+      {/* Sleek Floating Bottom Navigation Dock (Mobile Only) */}
+      <nav 
+        aria-label="Mobile Navigation Dock"
+        className="md:hidden fixed bottom-3 inset-x-3 max-w-md mx-auto z-40 bg-white/92 backdrop-blur-xl border border-[#EADBCE]/90 shadow-[0_8px_30px_rgb(0,0,0,0.12)] rounded-3xl p-1.5 flex items-center justify-around transition-all"
+      >
+        {[
+          { id: "food_intelligence", label: "Studio", icon: ChefHat },
+          { id: "diary", label: "Diary & Table", icon: BookOpen },
+          { id: "water", label: "Water", icon: Droplet },
+          { id: "database", label: "Foods", icon: Search },
+          { id: "profile", label: "Profile", icon: User }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id as any);
+                if (tab.id === "profile") setShowMedicalModal(true);
+              }}
+              className={`flex flex-col items-center justify-center py-2 px-3 rounded-2xl text-[10px] font-bold transition-all active:scale-90 cursor-pointer ${
+                isActive 
+                  ? "bg-teal-700 text-white shadow-xs" 
+                  : "text-[#7A6451] hover:text-[#2D2015] hover:bg-[#FAF7F2]"
+              }`}
+            >
+              <Icon className={`w-4 h-4 mb-0.5 ${isActive ? "text-white" : "text-[#8F7D6E]"}`} />
+              <span className="tracking-tight">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
     </div>
   );

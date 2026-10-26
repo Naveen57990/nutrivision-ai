@@ -28,6 +28,7 @@ import {
   Activity,
   Layers
 } from "lucide-react";
+import CuteDailyNutritionTable from "./CuteDailyNutritionTable";
 
 export interface LoggedFoodItem {
   id: string;
@@ -136,6 +137,28 @@ export default function CuteHealthDiary({
     }
   }, [diaryRecords]);
 
+  // Real-time synchronization when food or water is logged from any tab or studio
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const saved = localStorage.getItem("nutrivision_real_diary_records_v3");
+        if (saved) {
+          setDiaryRecords(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error("Failed to sync diary records:", e);
+      }
+    };
+
+    window.addEventListener("nutrivision_meal_logged", handleSync);
+    window.addEventListener("storage", handleSync);
+
+    return () => {
+      window.removeEventListener("nutrivision_meal_logged", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
+
   // Daily Totals - Real Calculations Only!
   const totalCalories = currentRecord.meals.reduce((sum, m) => sum + (m.calories || 0), 0);
   const totalProtein = Math.round(currentRecord.meals.reduce((sum, m) => sum + (m.protein_g || 0), 0) * 10) / 10;
@@ -178,27 +201,38 @@ export default function CuteHealthDiary({
   // Add food item
   const handleAddFoodItem = (slot: "breakfast" | "lunch" | "dinner" | "snack") => {
     if (!customDishName.trim()) return;
+    const cCal = parseInt(customCalories) || 0;
+    const cProt = parseFloat(customProtein) || 0;
+    const cCarb = parseFloat(customCarbs) || 0;
+    const cFib = parseFloat(customFiber) || 0;
+    const cFat = Math.max(0, Math.round((cCal - (cProt * 4 + cCarb * 4)) / 9));
+
     const newItem: LoggedFoodItem = {
       id: "food-" + Date.now(),
       name: customDishName.trim(),
       meal_slot: slot,
-      calories: parseInt(customCalories) || 0,
-      protein_g: parseFloat(customProtein) || 0,
-      carbs_g: parseFloat(customCarbs) || 0,
-      fiber_g: parseFloat(customFiber) || 0,
+      calories: cCal,
+      protein_g: cProt,
+      carbs_g: cCarb,
+      fat_g: cFat,
+      fiber_g: cFib,
       portion: "1 serving",
       time_logged: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
 
     setDiaryRecords((prev) => {
       const existing = prev[currentDateKey] || currentRecord;
-      return {
+      const updated = {
         ...prev,
         [currentDateKey]: {
           ...existing,
           meals: [...existing.meals, newItem]
         }
       };
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("nutrivision_meal_logged", { detail: newItem }));
+      }
+      return updated;
     });
 
     setCustomDishName("");
@@ -416,6 +450,19 @@ export default function CuteHealthDiary({
             />
 
           </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* SECTION 2: CUTE DAILY NUTRITION TRACKING TABLE (REMAINING/EXCESS)*/}
+        {/* ============================================================== */}
+        <div className="mt-6">
+          <CuteDailyNutritionTable
+            userProfile={userProfile}
+            currentRecord={currentRecord}
+            prettyDate={currentPrettyDate}
+            onOpenMealModal={(slot) => setActiveSlotModal(slot)}
+            onOpenStudio={() => onOpenAIShop && onOpenAIShop("breakfast")}
+          />
         </div>
 
         {/* ============================================================== */}

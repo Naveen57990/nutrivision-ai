@@ -146,7 +146,7 @@ export default function CuteFloatingCoachBuddy({
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 flex flex-col items-end">
       
       {/* Speech greeting bubble (shown initially) */}
       {!isOpen && showGreetingBubble && (
